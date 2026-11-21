@@ -43,18 +43,19 @@ canvas{max-height:340px}
 <body>
 <div id="topbar">
   <h3 style="margin:0">Commons</h3>
-  <label>run <select id="runpicker" title="pick a saved or live run"></select></label>
-  <label>seed <input id="seed" type="number" value="0" style="width:60px" title="seed for a new run"></label>
-  <button id="startrun" title="start a live run with this seed">start run</button>
+  <label>run <select id="runpicker" title="pick a saved or live run"><optgroup id="demogroup" label="Demo"></optgroup><optgroup id="allgroup" label="All runs"></optgroup></select></label>
+  <button id="advanced" title="show advanced options">advanced</button>
+  <label id="seedwrap" style="display:none">village nº <input id="seed" type="number" style="width:70px" title="Village number. The same number gives a similar run."></label>
+  <button id="startrun" title="start a new village">Start a new village</button>
   <button id="play" title="play the replay (space)">play</button>
   <button id="pause" title="pause replay / stop following a live run">pause</button>
   <input id="round" type="range" min="1" max="1" value="1" style="flex:1" title="round slider (left/right arrows)">
   <span id="roundlabel"></span>
   <span id="status"></span>
   <input id="ruletext" type="text" placeholder="type a rule: nobody may take more than 6 fish..." style="flex:1" title="rule text — parse to preview, then apply">
-  <button id="parsebtn" title="parse the rule text (preview only, no effect yet)">parse</button>
-  <button id="applyrule" title="apply the parsed rule to the selected live run" disabled>apply</button>
-  <button id="mic" title="record a rule aloud; the transcript fills the rule box">● rec</button>
+  <button id="parsebtn" title="check what the rule means (preview only, no effect yet)">Check my rule</button>
+  <button id="applyrule" title="enforce the parsed rule on the selected live run" disabled>Enforce it</button>
+  <button id="mic" title="record a rule aloud; the transcript fills the rule box">🎙 Speak a rule</button>
   <span id="micstatus"></span>
 </div>
 <div class="rulebox" id="rulebox"></div>
@@ -110,6 +111,26 @@ async function api(path) {
   return r.json();
 }
 
+const FRIENDLY_RUNS = {
+  "batch-no-rule-s2": "No rule (lake dies)",
+  "batch-quota6-30pct-3x-2ban-s0": "Quota with inspections (survives)",
+  "seed0-004": "Rule arrives too late (dies)",
+  "batch-D-emergency-relax-s0": "Emergency rule, then relax (rescue)",
+};
+const DEMO_RUNS = Object.keys(FRIENDLY_RUNS);
+
+function addRunOption(id) {
+  const picker = $("runpicker");
+  if ([...picker.options].some(o => o.value === id)) return;
+  const opt = document.createElement("option");
+  opt.value = id;
+  (DEMO_RUNS.includes(id) ? $("demogroup") : $("allgroup")).appendChild(opt);
+}
+
+function optionLabel(id, live) {
+  return (FRIENDLY_RUNS[id] || id) + (live ? " ●LIVE" : "");
+}
+
 async function init() {
   C = await api("/api/constants");
   const data = await api("/api/runs");
@@ -119,14 +140,13 @@ async function init() {
     const id = typeof r === "string" ? r : r && r.name;
     if (!id) continue;
     names.push(id);
-    const opt = document.createElement("option");
-    opt.value = id;
-    opt.textContent = id;
-    picker.appendChild(opt);
+    addRunOption(id);
   }
   if (names.includes("batch-D-emergency-relax-s0")) picker.value = "batch-D-emergency-relax-s0";
   else if (names.length) picker.value = names[0];
   picker.onchange = () => { liveRunId = null; followLive = true; $("pause").textContent = "pause"; hideHint(); loadRun(picker.value); };
+  $("advanced").onclick = () => { const w = $("seedwrap"); w.style.display = w.style.display === "none" ? "" : "none"; };
+  $("seed").value = Math.floor(Math.random() * 10000);
   $("startrun").onclick = startRun;
   $("parsebtn").onclick = parseRule;
   $("applyrule").onclick = applyRule;
@@ -181,21 +201,32 @@ async function applyRule() {
   if (runId === liveRunId) poll();
 }
 
+function ruleSentence(rule) {
+  const parts = [];
+  if (rule.quota_per_fisher != null) parts.push("at most " + rule.quota_per_fisher + " fish each");
+  if (rule.inspection_prob > 0) parts.push(Math.round(rule.inspection_prob * 100) + "% of boats inspected");
+  if (rule.fine_multiplier > 1) parts.push("fine " + rule.fine_multiplier + "x the excess");
+  if (rule.ban_rounds > 0) parts.push("banned for " + rule.ban_rounds + " rounds");
+  if (rule.tax_rate > 0) parts.push("tax " + Math.round(rule.tax_rate * 100) + "% of every catch");
+  if (rule.closed_every != null) parts.push("lake closed every " + rule.closed_every + "th round");
+  if (rule.transparency) parts.push("everyone sees true catches");
+  return parts.length ? parts.join(" · ") : "no limits";
+}
+
 function showRule(rule, pending) {
   const box = $("rulebox");
   box.innerHTML = "";
-  const tag = document.createElement("span");
-  tag.innerHTML = pending
-    ? '<b style="color:#f1c40f">preview — not applied yet</b>'
-    : '<b style="color:#2ecc71">applied ✓</b>';
-  box.appendChild(tag);
-  for (const [k, v] of Object.entries(rule)) {
-    const s = document.createElement("span");
-    const b = document.createElement("b");
-    b.textContent = k + ": ";
-    s.appendChild(b);
-    s.appendChild(document.createTextNode(String(v)));
-    box.appendChild(s);
+  const head = document.createElement("span");
+  head.innerHTML = pending ? "<b>Understood as:</b> " : '<b style="color:#2ecc71">Enforced ✓</b> ';
+  box.appendChild(head);
+  const body = document.createElement("span");
+  body.textContent = ruleSentence(rule) + (pending ? ". Not enforced yet." : ".");
+  box.appendChild(body);
+  if (rule.inspection_prob <= 0) {
+    const warn = document.createElement("span");
+    warn.style.color = "#f87171";
+    warn.textContent = " Nobody checks this rule.";
+    box.appendChild(warn);
   }
 }
 
@@ -207,15 +238,11 @@ async function refreshPicker() {
     const id = typeof r === "string" ? r : r && r.name;
     if (!id) continue;
     runActive[id] = !!(r && r.active);
-    if (![...picker.options].some(o => o.value === id)) {
-      const opt = document.createElement("option");
-      opt.value = id;
-      picker.appendChild(opt);
-    }
+    addRunOption(id);
   }
   for (const opt of picker.options) {
     const live = !!runActive[opt.value];
-    opt.textContent = opt.value + (live ? " ●LIVE" : "");
+    opt.textContent = optionLabel(opt.value, live);
     opt.style.color = live ? "#2ecc71" : "";
   }
 }
@@ -282,7 +309,7 @@ function render() {
   const dead = rec.stock_after < C.F_DEAD;
   $("roundlabel").textContent = "round " + rec.round + " / " + rounds.length;
   $("status").textContent = dead ? "lake dead" : "stock " + rec.stock_after;
-  $("currule").textContent = rec.rule ? "in effect: " + rec.rule.plain_text : "no rule in effect";
+  $("currule").textContent = rec.rule ? "Rule in force: " + rec.rule.plain_text : "no rule in effect";
   const circle = $("lakecircle");
   const frac = Math.max(0, Math.min(1, rec.stock_after / C.K));
   circle.setAttribute("r", (20 + 110 * Math.sqrt(frac)).toFixed(1));
@@ -329,7 +356,7 @@ function updateStockChart() {
       type: "line",
       data: {labels, datasets: [
         {label: "stock", data: stock, borderColor: "#3498db", pointRadius: 2, tension: 0.2},
-        {label: "K/2 = " + C.K / 2, data: halfK, borderColor: "#888", borderDash: [6, 6], pointRadius: 0, fill: false},
+        {label: "Healthy level (" + C.K / 2 + ")", data: halfK, borderColor: "#888", borderDash: [6, 6], pointRadius: 0, fill: false},
         {label: "rule applied", data: marks, showLine: false, pointRadius: 6, pointBackgroundColor: "#f1c40f", fill: false},
       ]},
       options: {animation: false, scales: {x: {ticks: {color: "#eee"}}, y: {min: 0, max: C.K, ticks: {color: "#eee"}}},
@@ -371,6 +398,18 @@ function updateCatchChart(rec) {
 
 const esc = s => String(s).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
 
+const RULE_WORDS = {
+  "no-rule": "No rule",
+  "quota6-no-insp": "Quota 6, nobody checked",
+  "quota6-30pct-3x-2ban": "Quota 6, 30% inspected",
+  "tax30": "30% tax on every catch",
+  "closed-every-3": "Lake closed every 3rd round",
+  "transparency": "Everyone sees true catches",
+  "C-emergency": "Emergency quota mid-run",
+  "D-emergency-relax": "Emergency rule, then relax",
+  "rule3-late": "Rule starts at round 3",
+};
+
 async function loadResults() {
   let data;
   try {
@@ -390,9 +429,9 @@ async function loadResults() {
     for (const c of numCols) o[c] = rows.reduce((s, r) => s + (parseFloat(r[c]) || 0), 0) / rows.length;
     return o;
   }).sort((a, b) => b.rounds_survived - a.rounds_survived);
-  let html = "<table><tr><th>rule</th><th>runs</th><th>rounds</th><th>final stock</th><th>catch</th><th>gini</th><th>over quota</th><th>lying</th></tr>";
+  let html = "<table><tr><th>rule</th><th>runs</th><th>Rounds survived (of 30)</th><th>final stock</th><th>catch</th><th>gini</th><th>over quota</th><th>False reports</th></tr>";
   for (const o of avg) {
-    html += "<tr><td>" + esc(o.rule_name) + "</td><td>" + o.n + "</td><td>" + o.rounds_survived.toFixed(1) +
+    html += "<tr><td>" + esc(RULE_WORDS[o.rule_name] || o.rule_name) + "</td><td>" + o.n + "</td><td>" + o.rounds_survived.toFixed(1) +
       "</td><td>" + o.final_stock.toFixed(0) + "</td><td>" + o.total_catch.toFixed(0) +
       "</td><td>" + o.gini.toFixed(3) + "</td><td>" + (o.share_over_quota * 100).toFixed(0) +
       "%</td><td>" + (o.share_lying * 100).toFixed(0) + "%</td></tr>";
