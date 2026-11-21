@@ -231,6 +231,24 @@ def batch_results():
                     recs = [json.loads(l) for l in fh if l.strip()]
                 for c, v in metrics.enforcement_from_recs(recs).items():
                     row[c] = v
+    # also include rule-enforced runs outside the batch scenarios (e.g. live UI runs),
+    # computed from their logs so the table updates as they play
+    for entry in sorted(os.listdir(RUNS_DIR)):
+        if entry == "batch" or entry.startswith("batch-"):
+            continue
+        log = os.path.join(RUNS_DIR, entry, "rounds.jsonl")
+        if not os.path.isfile(log):
+            continue
+        with open(log, encoding="utf-8") as fh:
+            recs = [json.loads(l) for l in fh if l.strip()]
+        rule_rec = next((r for r in recs if r.get("rule")), None)
+        if rule_rec is None:
+            continue
+        text = rule_rec["rule"].get("plain_text", "") or "rule"
+        name = text if len(text) <= 60 else text[:60] + "…"
+        m = re.search(r"-s(\d+)$", entry)
+        seed = int(m.group(1)) if m else 0
+        rows.append(metrics.row_from_log(os.path.join(RUNS_DIR, entry), name, rule_rec["round"], seed))
     columns = list(rows[0].keys()) if rows else []
     for c in new_cols:
         if c not in columns:
