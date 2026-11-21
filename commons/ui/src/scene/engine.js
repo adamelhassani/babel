@@ -46,7 +46,8 @@ export function createScene(canvas) {
 
   const center = () => ({x: S.W / 2, y: S.H * 0.52});
   const R0 = () => Math.min(0.47 * S.H, 0.42 * S.W);
-  const baseR = () => Math.max(60, R0() * Math.sqrt(Math.max(0.03, S.health)));
+  const visHealth = () => (S.C && S.C.F0 ? Math.min(1.15, Math.max(0.03, (S.rec ? S.rec.stock_after : S.C.F0) / S.C.F0)) : S.health);
+  const baseR = () => Math.max(60, R0() * Math.sqrt(visHealth()));
   const xScale = () => Math.max(1, Math.min(2.2, (S.W * 0.96) / (2 * R0())));
 
   function newFish() {
@@ -212,7 +213,7 @@ export function createScene(canvas) {
       const a = (k / 72) * Math.PI * 2;
       const r = R * (1 + 0.05 * Math.sin(3 * a + t * 0.9) + 0.035 * Math.sin(5 * a - t * 1.4) + 0.02 * Math.sin(8 * a + t * 0.6));
       const x = c.x + Math.cos(a) * r * xs;
-      const y = c.y + Math.sin(a) * r * 0.82;
+      const y = c.y + Math.sin(a) * r * 0.88;
       if (k === 0) ctx.moveTo(x, y);
       else ctx.lineTo(x, y);
     }

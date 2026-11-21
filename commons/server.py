@@ -36,6 +36,7 @@ def index():
 def constants():
     return {
         "K": config.K,
+        "F0": config.F0,
         "F_DEAD": config.F_DEAD,
         "SUSTAINABLE_CATCH": config.SUSTAINABLE_CATCH,
         "PER_FISHER_SUSTAINABLE": config.SUSTAINABLE_CATCH / config.N,
