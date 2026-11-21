@@ -137,16 +137,17 @@ def batch_results():
 def run_inspector(run_id: str):
     if not RUN_ID_RE.match(run_id):
         raise HTTPException(400, "invalid run_id")
-    path = os.path.join(RUNS_DIR, run_id, "inspector.jsonl")
-    if not os.path.isfile(path):
-        raise HTTPException(404, f"no inspector.jsonl for {run_id} yet")
-    checks = []
-    with open(path, encoding="utf-8") as fh:
-        for line in fh:
-            line = line.strip()
-            if line:
-                checks.append(json.loads(line))
-    return {"run_id": run_id, "checks": checks}
+    for name in ("inspector_agent.jsonl", "inspector.jsonl"):
+        path = os.path.join(RUNS_DIR, run_id, name)
+        if os.path.isfile(path):
+            checks = []
+            with open(path, encoding="utf-8") as fh:
+                for line in fh:
+                    line = line.strip()
+                    if line:
+                        checks.append(json.loads(line))
+            return {"run_id": run_id, "source": name, "checks": checks}
+    raise HTTPException(404, f"no inspector output for {run_id} yet")
 
 
 @app.post("/transcribe")

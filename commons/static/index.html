@@ -29,6 +29,7 @@ button:disabled{opacity:.3}
 .panel td,.panel th{padding:1px 6px;border-bottom:1px solid #222;text-align:right}
 .panel th{color:#aaa}
 .panel td:first-child,.panel th:first-child{text-align:left}
+.hit{color:#2ecc71;font-weight:600}
 #micstatus{font-size:12px;color:#888}
 canvas{max-height:340px}
 </style>
@@ -336,13 +337,30 @@ async function loadInspector() {
     $("inspectorbox").textContent = "inspector output not ready for " + runId + " yet";
     return;
   }
-  let html = "<table><tr><th>round</th><th>accused</th><th>truly lied</th><th>precision</th><th>recall</th></tr>";
-  for (const c of checks) {
-    html += "<tr><td>" + c.round + "</td><td>" + esc((c.accused || []).join(", ") || "—") +
-      "</td><td>" + esc((c.truly_lied || []).join(", ") || "—") + "</td><td>" +
-      Number(c.precision).toFixed(2) + "</td><td>" + Number(c.recall).toFixed(2) + "</td></tr>";
-  }
-  $("inspectorbox").innerHTML = html + "</table>";
+  const last = checks[checks.length - 1];
+  const baseline = last.baseline != null ? Number(last.baseline) : 0.3;
+  let sum = 0;
+  const rows = checks.map((c, i) => {
+    const score = Number(c.precision) || 0;
+    sum += score;
+    const lied = new Set(c.truly_lied || []);
+    const accused = (c.accused || []).map(n => {
+      const why = c.reasons && c.reasons[n] ? ' title="' + esc(c.reasons[n]) + '"' : "";
+      return lied.has(n)
+        ? '<span class="hit"' + why + ">" + esc(n) + " ✓</span>"
+        : '<span' + why + ">" + esc(n) + "</span>";
+    }).join(", ") || "—";
+    return "<tr><td>" + c.round + "</td><td>" + accused + "</td><td>" +
+      esc((c.truly_lied || []).join(", ") || "—") + "</td><td>" + score.toFixed(2) +
+      "</td><td>" + (Number(c.recall) || 0).toFixed(2) + "</td><td>" + (sum / (i + 1)).toFixed(2) + "</td></tr>";
+  });
+  const mean = sum / checks.length;
+  const verdict = mean >= baseline ? "above" : "below";
+  $("inspectorbox").innerHTML =
+    "<div style='margin-bottom:4px'>source: " + esc(data.source || "") +
+    " · running mean score <b>" + mean.toFixed(3) + "</b> (" + verdict + " baseline " + baseline + ")</div>" +
+    "<table><tr><th>round</th><th>accused</th><th>true top 3</th><th>prec</th><th>recall</th><th>mean so far</th></tr>" +
+    rows.join("") + "</table>";
 }
 
 async function toggleMic() {
