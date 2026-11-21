@@ -17,6 +17,8 @@ from . import run as runmod
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 RUNS_DIR = os.path.join(REPO_ROOT, config.RUNS_DIR)
 STATIC_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
+DIST_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ui", "dist")
+DIST_INDEX = os.path.join(DIST_DIR, "index.html")
 
 RUN_ID_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]*$")
 
@@ -25,6 +27,8 @@ app = FastAPI(title="Commons")
 
 @app.get("/")
 def index():
+    if os.path.isfile(DIST_INDEX):
+        return FileResponse(DIST_INDEX)
     return FileResponse(os.path.join(STATIC_DIR, "index.html"))
 
 
@@ -184,6 +188,8 @@ async def speak(body: SpeakBody):
     return Response(content=data, media_type="audio/wav")
 
 
+if os.path.isdir(os.path.join(DIST_DIR, "assets")):
+    app.mount("/assets", StaticFiles(directory=os.path.join(DIST_DIR, "assets")), name="assets")
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
 
 
