@@ -28,6 +28,9 @@ export default function App() {
 
   useEffect(() => { roundsRef.current = rounds; }, [rounds]);
 
+  const notify = useCallback((msg) => setToastMsg(msg), []);
+  const hideHint = useCallback(() => setShowHint(false), []);
+
   const refreshSummary = useCallback(async () => {
     if (!runId) return;
     const rr = roundsRef.current;
@@ -42,9 +45,6 @@ export default function App() {
       notify("summary failed: " + e.message);
     }
   }, [runId, notify]);
-
-  const notify = useCallback((msg) => setToastMsg(msg), []);
-  const hideHint = useCallback(() => setShowHint(false), []);
 
   const loadRun = useCallback(async (id) => {
     try {
