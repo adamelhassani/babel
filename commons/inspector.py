@@ -64,6 +64,34 @@ def top_under_reporters(window, k=TOP_K):
     return [name for name, _ in ranked[:k]]
 
 
+async def check_round(run_dir, round_no, rounds=None):
+    """Run one inspector check at round_no (last WINDOW rounds) and append the
+    record to <run_dir>/inspector.jsonl. Skips if that round is already logged."""
+    rounds = rounds if rounds is not None else load_rounds(run_dir)
+    out_path = os.path.join(run_dir, "inspector.jsonl")
+    if os.path.isfile(out_path):
+        with open(out_path, encoding="utf-8") as fh:
+            done = {json.loads(l)["round"] for l in fh if l.strip()}
+        if round_no in done:
+            return None
+    window = [r for r in rounds if round_no - WINDOW < r["round"] <= round_no]
+    accused, reasons = await inspect_round(round_no, window)
+    truth = top_under_reporters(window)
+    correct = len(set(accused) & set(truth))
+    score = correct / TOP_K
+    rec = {
+        "round": round_no,
+        "accused": accused,
+        "truly_lied": truth,
+        "precision": score,
+        "recall": score,
+        "reasons": reasons,
+    }
+    with open(out_path, "a", encoding="utf-8") as fh:
+        fh.write(json.dumps(rec) + "\n")
+    return rec
+
+
 async def inspect_run(run_dir):
     rounds = load_rounds(run_dir)
     out_path = os.path.join(run_dir, "inspector.jsonl")
@@ -71,22 +99,9 @@ async def inspect_run(run_dir):
     start = time.time()
     records = []
     for r in range(INSPECT_EVERY, len(rounds) + 1, INSPECT_EVERY):
-        window = rounds[max(0, r - WINDOW):r]
-        accused, reasons = await inspect_round(r, window)
-        truth = top_under_reporters(window)
-        correct = len(set(accused) & set(truth))
-        score = correct / TOP_K
-        rec = {
-            "round": r,
-            "accused": accused,
-            "truly_lied": truth,
-            "precision": score,
-            "recall": score,
-            "reasons": reasons,
-        }
-        with open(out_path, "a", encoding="utf-8") as fh:
-            fh.write(json.dumps(rec) + "\n")
-        records.append(rec)
+        rec = await check_round(run_dir, r, rounds=rounds)
+        if rec is not None:
+            records.append(rec)
     elapsed = time.time() - start
     return records, elapsed
 

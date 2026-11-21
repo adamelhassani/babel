@@ -12,6 +12,7 @@ from pydantic import BaseModel
 from . import audio as audiomod
 from . import config
 from . import fishers
+from . import inspector as inspectormod
 from . import rules as rulesmod
 from . import run as runmod
 
@@ -165,9 +166,35 @@ def run_rounds(run_id: str):
     return {"run_id": run_id, "rounds": _read_rounds(run_id)}
 
 
+_INSPECTOR_WATCHERS = set()
+
+
+async def _watch_inspector(run_id):
+    run_dir = os.path.join(RUNS_DIR, run_id)
+    while True:
+        entry = runmod._RUNS.get(run_id)
+        if entry is None or entry["task"].done():
+            break
+        rnd = entry["state"].get("round", 0)
+        if rnd >= inspectormod.INSPECT_EVERY and rnd % inspectormod.INSPECT_EVERY == 0:
+            try:
+                await inspectormod.check_round(run_dir, rnd)
+            except Exception:
+                pass
+        await asyncio.sleep(2)
+
+
+def _start_inspector_watch(run_id):
+    if run_id in _INSPECTOR_WATCHERS:
+        return
+    _INSPECTOR_WATCHERS.add(run_id)
+    asyncio.create_task(_watch_inspector(run_id))
+
+
 @app.post("/run")
 async def start(body: StartBody):
     run_id = runmod.start_run(body.seed)
+    _start_inspector_watch(run_id)
     return {"run_id": run_id}
 
 
@@ -187,6 +214,7 @@ async def apply_rule_text(body: RuleBody):
             m = re.search(r"-s(\d+)$", run_id)
             seed = int(m.group(1)) if m else 0
         run_id = runmod.start_run(seed, rule=rule)
+        _start_inspector_watch(run_id)
         restarted = True
     else:
         runmod.apply_rule(run_id, rule)
