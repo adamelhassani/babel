@@ -1,0 +1,186 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Commons</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+<style>
+body{font-family:system-ui,sans-serif;margin:0;background:#111;color:#eee}
+#topbar{display:flex;gap:8px;align-items:center;padding:8px;border-bottom:1px solid #333;flex-wrap:wrap}
+button,select,input{background:#222;color:#eee;border:1px solid #444;border-radius:4px;padding:4px 8px}
+.panels{display:grid;grid-template-columns:380px 1fr 1fr;gap:8px;padding:8px}
+.panel{border:1px solid #333;border-radius:8px;padding:8px;min-height:360px}
+h3{margin:4px 0}
+#lakebox{position:relative;width:340px;height:340px;margin:0 auto}
+#lake{position:absolute;left:40px;top:40px}
+.boat{position:absolute;transform:translate(-50%,-50%);text-align:center;width:96px}
+.boat .bubble{background:#fff;color:#111;border-radius:8px;padding:2px 6px;font-size:10px;min-height:26px;margin-bottom:2px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.boat .hull{font-size:18px;line-height:1}
+.boat .name{font-size:10px;color:#ccc}
+#roundlabel,#status{font-size:12px;color:#aaa;white-space:nowrap}
+canvas{max-height:340px}
+</style>
+</head>
+<body>
+<div id="topbar">
+  <h3 style="margin:0">Commons</h3>
+  <label>run <select id="runpicker"></select></label>
+  <button id="play">play</button>
+  <button id="pause">pause</button>
+  <input id="round" type="range" min="1" max="1" value="1" style="flex:1">
+  <span id="roundlabel"></span>
+  <span id="status"></span>
+</div>
+<div class="panels">
+  <div class="panel"><h3>Lake</h3>
+    <div id="lakebox">
+      <svg id="lake" width="260" height="260"><circle id="lakecircle" cx="130" cy="130" r="100" fill="#3498db"/></svg>
+      <div id="boats"></div>
+    </div>
+  </div>
+  <div class="panel"><h3>Stock over rounds</h3><canvas id="stockchart"></canvas></div>
+  <div class="panel"><h3>Catch vs report</h3><canvas id="catchchart"></canvas></div>
+</div>
+<script>
+const $ = id => document.getElementById(id);
+let C = null, rounds = [], cur = 1, timer = null, stockChart = null, catchChart = null;
+
+async function api(path) {
+  const r = await fetch(path);
+  if (!r.ok) throw new Error(await r.text());
+  return r.json();
+}
+
+async function init() {
+  C = await api("/api/constants");
+  const data = await api("/api/runs");
+  const picker = $("runpicker");
+  for (const name of data.runs) {
+    const opt = document.createElement("option");
+    opt.value = name;
+    opt.textContent = name;
+    picker.appendChild(opt);
+  }
+  if (data.runs.includes("phase0-seed0")) picker.value = "phase0-seed0";
+  else if (data.runs.length) picker.value = data.runs[0];
+  picker.onchange = () => loadRun(picker.value);
+  $("play").onclick = play;
+  $("pause").onclick = pause;
+  $("round").oninput = e => { cur = +e.target.value; pause(); render(); };
+  await loadRun(picker.value);
+}
+
+async function loadRun(id) {
+  const data = await api("/api/runs/" + encodeURIComponent(id) + "/rounds");
+  rounds = data.rounds;
+  const slider = $("round");
+  slider.min = 1;
+  slider.max = Math.max(1, rounds.length);
+  cur = rounds.length;
+  slider.value = cur;
+  buildBoats();
+  render();
+}
+
+function buildBoats() {
+  const box = $("boats");
+  box.innerHTML = "";
+  const n = rounds.length ? rounds[rounds.length - 1].fishers.length : C.N;
+  for (let i = 0; i < n; i++) {
+    const d = document.createElement("div");
+    d.className = "boat";
+    const ang = -Math.PI / 2 + i * 2 * Math.PI / n;
+    d.style.left = (170 + 150 * Math.cos(ang)) + "px";
+    d.style.top = (170 + 150 * Math.sin(ang)) + "px";
+    d.innerHTML = '<div class="bubble"></div><div class="hull">🛶</div><div class="name"></div>';
+    box.appendChild(d);
+  }
+}
+
+function render() {
+  if (!rounds.length) return;
+  const rec = rounds[cur - 1];
+  $("round").value = cur;
+  const dead = rec.stock_after < C.F_DEAD;
+  $("roundlabel").textContent = "round " + rec.round + " / " + rounds.length;
+  $("status").textContent = dead ? "lake dead" : "stock " + rec.stock_after;
+  const circle = $("lakecircle");
+  const frac = Math.max(0, Math.min(1, rec.stock_after / C.K));
+  circle.setAttribute("r", (20 + 110 * Math.sqrt(frac)).toFixed(1));
+  circle.setAttribute("fill", dead ? "#666" : "#3498db");
+  const boats = $("boats").children;
+  rec.fishers.forEach((f, i) => {
+    if (!boats[i]) return;
+    boats[i].querySelector(".bubble").textContent = f.say || "";
+    boats[i].querySelector(".name").textContent = f.name;
+  });
+  updateStockChart();
+  updateCatchChart(rec);
+}
+
+function updateStockChart() {
+  const seen = rounds.slice(0, cur);
+  const labels = seen.map(r => r.round);
+  const stock = seen.map(r => r.stock_after);
+  const halfK = labels.map(() => C.K / 2);
+  if (!stockChart) {
+    stockChart = new Chart($("stockchart"), {
+      type: "line",
+      data: {labels, datasets: [
+        {label: "stock", data: stock, borderColor: "#3498db", pointRadius: 2, tension: 0.2},
+        {label: "K/2 = " + C.K / 2, data: halfK, borderColor: "#888", borderDash: [6, 6], pointRadius: 0, fill: false},
+      ]},
+      options: {animation: false, scales: {x: {ticks: {color: "#eee"}}, y: {min: 0, max: C.K, ticks: {color: "#eee"}}},
+                plugins: {legend: {labels: {color: "#eee"}}}}
+    });
+  } else {
+    stockChart.data.labels = labels;
+    stockChart.data.datasets[0].data = stock;
+    stockChart.data.datasets[1].data = halfK;
+    stockChart.update();
+  }
+}
+
+function updateCatchChart(rec) {
+  const labels = rec.fishers.map(f => f.name);
+  const catches = rec.fishers.map(f => f.catch);
+  const reports = rec.fishers.map(f => f.report);
+  const line = labels.map(() => C.PER_FISHER_SUSTAINABLE);
+  if (!catchChart) {
+    catchChart = new Chart($("catchchart"), {
+      type: "bar",
+      data: {labels, datasets: [
+        {label: "catch", data: catches, backgroundColor: "#e67e22"},
+        {label: "report", data: reports, backgroundColor: "#9b59b6"},
+        {type: "line", label: "sustainable " + C.PER_FISHER_SUSTAINABLE, data: line, borderColor: "#2ecc71", borderDash: [6, 6], pointRadius: 0, fill: false},
+      ]},
+      options: {animation: false, scales: {x: {ticks: {color: "#eee"}}, y: {min: 0, max: C.C_MAX, ticks: {color: "#eee"}}},
+                plugins: {legend: {labels: {color: "#eee"}}}}
+    });
+  } else {
+    catchChart.data.labels = labels;
+    catchChart.data.datasets[0].data = catches;
+    catchChart.data.datasets[1].data = reports;
+    catchChart.data.datasets[2].data = line;
+    catchChart.update();
+  }
+}
+
+function play() {
+  if (timer || !rounds.length) return;
+  if (cur >= rounds.length) { cur = 1; render(); }
+  timer = setInterval(() => {
+    cur++;
+    if (cur > rounds.length) { pause(); return; }
+    render();
+  }, 700);
+}
+
+function pause() {
+  if (timer) { clearInterval(timer); timer = null; }
+}
+
+init().catch(e => { $("status").textContent = "error: " + e.message; });
+</script>
+</body>
+</html>
