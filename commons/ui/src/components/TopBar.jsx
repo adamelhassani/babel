@@ -1,48 +1,9 @@
-import { useRef, useState } from "react";
-import { api } from "../api";
+import { useState } from "react";
+import { useMic } from "../hooks";
 
 export default function TopBar(p) {
   const [seed, setSeed] = useState(0);
-  const [micOn, setMicOn] = useState(false);
-  const [micStatus, setMicStatus] = useState("");
-  const recorder = useRef(null);
-  const chunks = useRef([]);
-
-  const toggleMic = async () => {
-    if (recorder.current && recorder.current.state !== "inactive") {
-      recorder.current.stop();
-      return;
-    }
-    let stream;
-    try {
-      stream = await navigator.mediaDevices.getUserMedia({audio: true});
-    } catch (e) {
-      p.notify("mic error: " + e.message);
-      return;
-    }
-    chunks.current = [];
-    const mr = new MediaRecorder(stream);
-    mr.ondataavailable = (e) => { if (e.data.size) chunks.current.push(e.data); };
-    mr.onstop = async () => {
-      stream.getTracks().forEach((t) => t.stop());
-      setMicOn(false);
-      setMicStatus("transcribing…");
-      try {
-        const blob = new Blob(chunks.current, {type: mr.mimeType || "audio/webm"});
-        const data = await api.transcribe(await blob.arrayBuffer());
-        p.onRuleText(data.text);
-        setMicStatus("transcript in rule box");
-      } catch (e) {
-        setMicStatus("");
-        p.notify("transcribe failed: " + e.message);
-      }
-    };
-    recorder.current = mr;
-    mr.start();
-    setMicOn(true);
-    setMicStatus("recording… click again to stop");
-  };
-
+  const mic = useMic(p.notify, p.onRuleText);
   const pauseLabel = p.liveRunId ? (p.followLive ? "pause" : "resume live") : "pause";
 
   return (
@@ -71,8 +32,8 @@ export default function TopBar(p) {
         style={{flex: 1}} title="rule text — parse to preview, then apply" onChange={(e) => p.onRuleText(e.target.value)} />
       <button title="parse the rule text (preview only, no effect yet)" onClick={p.onParse}>parse</button>
       <button title="apply the parsed rule to the selected live run" disabled={p.applyDisabled} onClick={p.onApply}>apply</button>
-      <button id="mic" className={micOn ? "recording" : ""} title="record a rule aloud; the transcript fills the rule box" onClick={toggleMic}>● rec</button>
-      <span id="micstatus">{micStatus}</span>
+      <button id="mic" className={mic.micOn ? "recording" : ""} title="record a rule aloud; the transcript fills the rule box" onClick={mic.toggle}>● rec</button>
+      <span id="micstatus">{mic.micStatus}</span>
     </div>
   );
 }

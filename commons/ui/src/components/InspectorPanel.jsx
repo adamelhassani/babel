@@ -1,11 +1,12 @@
 export default function InspectorPanel({inspector, runId}) {
-  if (!inspector || inspector === "waiting") {
-    return <div className="muted">inspector output not ready for {runId} yet</div>;
+  if (!inspector || inspector === "waiting" || !(inspector.checks || []).length) {
+    return (
+      <div className="muted emptyinsp">
+        <span className="spinner" /> Inspector is analyzing {runId}… (one check every 5 rounds, arrives asynchronously)
+      </div>
+    );
   }
-  const checks = inspector.checks || [];
-  if (!checks.length) {
-    return <div className="muted">inspector output not ready for {runId} yet</div>;
-  }
+  const checks = inspector.checks;
   const last = checks[checks.length - 1];
   const baseline = last.baseline != null ? Number(last.baseline) : 0.3;
   const mean = checks.reduce((s, c) => s + (Number(c.precision) || 0), 0) / checks.length;

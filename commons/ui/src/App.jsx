@@ -1,17 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "./api";
-import TopBar from "./components/TopBar";
-import RuleBar from "./components/RuleBar";
-import LakeScene from "./components/LakeScene";
-import StockChart from "./components/StockChart";
-import CatchChart from "./components/CatchChart";
-import ResultsTable from "./components/ResultsTable";
-import InspectorPanel from "./components/InspectorPanel";
+import Scene from "./components/Scene";
+import DataView from "./components/DataView";
 import Toast from "./components/Toast";
 import Hint from "./components/Hint";
 
 export default function App() {
   const [C, setC] = useState(null);
+  const [view, setView] = useState("scene");
   const [runs, setRuns] = useState([]);
   const [runId, setRunId] = useState("");
   const [rounds, setRounds] = useState([]);
@@ -93,6 +89,7 @@ export default function App() {
 
   useEffect(() => {
     if (!playing || !rounds.length) return;
+    const delay = view === "scene" ? 1100 : 700;
     const t = setInterval(() => {
       setCur((c) => {
         if (c >= rounds.length) {
@@ -101,9 +98,9 @@ export default function App() {
         }
         return c + 1;
       });
-    }, 700);
+    }, delay);
     return () => clearInterval(t);
-  }, [playing, rounds.length]);
+  }, [playing, rounds.length, view]);
 
   useEffect(() => {
     const h = (e) => {
@@ -192,41 +189,28 @@ export default function App() {
 
   if (!C) return <div className="loading">loading…</div>;
 
+  const controls = {
+    C, rec, rounds, cur, batch, inspector, preview, ruleRound,
+    runs, runId, onPickRun, onStartRun,
+    playing, onPlay: () => { hideHint(); setPlaying((p) => !p); },
+    onPause: () => { setPlaying(false); if (liveRunId) setFollowLive((f) => !f); },
+    liveRunId, followLive,
+    maxRounds: Math.max(1, rounds.length),
+    onScrub: (v) => { setPlaying(false); hideHint(); setCur(v); },
+    roundLabel: rec ? "round " + rec.round + " / " + rounds.length : "",
+    statusText: rec ? (rec.stock_after < C.F_DEAD ? "lake dead" : "stock " + rec.stock_after) : "",
+    ruleText, onRuleText, onParse, onApply,
+    applyDisabled: !preview || preview.applied,
+    notify, onSpeak,
+  };
+
   return (
     <div>
-      <TopBar
-        runs={runs}
-        runId={runId}
-        onPickRun={onPickRun}
-        onStartRun={onStartRun}
-        playing={playing}
-        onPlay={() => { hideHint(); setPlaying((p) => !p); }}
-        liveRunId={liveRunId}
-        followLive={followLive}
-        onPause={() => {
-          setPlaying(false);
-          if (liveRunId) setFollowLive((f) => !f);
-        }}
-        cur={cur}
-        maxRounds={Math.max(1, rounds.length)}
-        onScrub={(v) => { setPlaying(false); hideHint(); setCur(v); }}
-        roundLabel={rec ? "round " + rec.round + " / " + rounds.length : ""}
-        statusText={rec ? (rec.stock_after < C.F_DEAD ? "lake dead" : "stock " + rec.stock_after) : ""}
-        ruleText={ruleText}
-        onRuleText={onRuleText}
-        onParse={onParse}
-        onApply={onApply}
-        applyDisabled={!preview || preview.applied}
-        notify={notify}
-      />
-      <RuleBar preview={preview} rec={rec} />
-      <div className="panels">
-        <div className="panel lake"><h3>Lake</h3><LakeScene C={C} rec={rec} ruleRound={ruleRound} onSpeak={onSpeak} /></div>
-        <div className="panel"><h3>Stock over rounds</h3><StockChart C={C} rounds={rounds} cur={cur} /></div>
-        <div className="panel"><h3>Catch vs report</h3><CatchChart C={C} rec={rec} /></div>
-        <div className="panel"><h3>Results (avg by rule, sorted by rounds survived)</h3><ResultsTable batch={batch} /></div>
-        <div className="panel"><h3>Inspector</h3><InspectorPanel inspector={inspector} runId={runId} /></div>
-      </div>
+      {view === "scene" ? <Scene {...controls} /> : <DataView {...controls} />}
+      <button className="viewtoggle" title="switch between scene and data views"
+        onClick={() => setView((v) => (v === "scene" ? "data" : "scene"))}>
+        {view === "scene" ? "📊 Data" : "🌊 Scene"}
+      </button>
       <Hint visible={showHint} />
       <Toast msg={toastMsg} onDone={() => setToastMsg(null)} />
     </div>
