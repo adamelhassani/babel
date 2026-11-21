@@ -123,6 +123,7 @@ async def run_sim(run_id, seed, rounds, state=None):
             stock = stock_after
             if state:
                 state["round"] = rnd
+                state["stock"] = stock_after
             if dead:
                 dead_round = rnd
                 break
@@ -141,6 +142,9 @@ async def run_sim(run_id, seed, rounds, state=None):
         "samples": samples,
         "rule": state["rule"] if state else None,
         "seconds_per_round": elapsed / len(stocks) if stocks else 0.0,
+        "total_catch_sum": sum(catches_log),
+        "final_wealths": [f.wealth for f in fishers],
+        "min_wealth": min((f.wealth for f in fishers), default=0),
     }
 
 
@@ -153,6 +157,7 @@ def print_run(res, label):
     print(f"  share lying (report != catch): {res['lie_share']:.3f}")
     print(f"  fishers caught: {res['caught'] if res['caught'] else '(none)'}")
     print(f"  statements after the rule: {res['samples']}")
+    print(f"  lowest wealth among fishers at end: {res['min_wealth']}")
 
 
 RULE_SENTENCE = ("Nobody may take more than 6 fish. Three in ten boats are inspected. "
