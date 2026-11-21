@@ -18,32 +18,38 @@ export default function Hud(p) {
 
   return (
     <div className="hud">
-      <h3>Commons</h3>
-      <select value={p.runId} onChange={(e) => p.onPickRun(e.target.value)} title="pick a saved or live run">
-        <optgroup label="Demo">{demoRuns.map(runOpt)}</optgroup>
-        <optgroup label="All runs">{otherRuns.map(runOpt)}</optgroup>
-      </select>
-      <button title="show advanced options" onClick={() => setShowAdv((v) => !v)}>advanced</button>
-      {showAdv && (
-        <label>village nº
-          <input type="number" value={seed} style={{width: 70}}
-            title="Village number. The same number gives a similar run."
-            onChange={(e) => setSeed(+e.target.value || 0)} />
-        </label>
-      )}
-      <button title="start a new village" onClick={() => p.onStartRun(seed)}>Start a new village</button>
-      <button title="play the scene (space)" onClick={p.onPlay}>{p.playing ? "pause" : "play"}</button>
-      <button title="pause / stop following a live run" onClick={p.onPause}>{pauseLabel}</button>
-      <input type="range" min={1} max={p.maxRounds} value={p.cur} className="hudslider"
-        title="round slider (left/right arrows)" onChange={(e) => p.onScrub(+e.target.value)} />
-      <span className="hudlabel">{p.roundLabel}</span>
-      <span className="hudlabel stock" key={p.statusText}>{p.statusText}</span>
-      <input type="text" value={p.ruleText} placeholder="type a rule: nobody may take more than 6 fish..." className="hudrule"
-        title="rule text — check it, then enforce" onChange={(e) => p.onRuleText(e.target.value)} />
-      <button title="check what the rule means (preview only, no effect yet)" onClick={p.onParse}>Check my rule</button>
-      <button title="enforce the parsed rule on the selected live run" disabled={p.applyDisabled} onClick={p.onApply}>Enforce it</button>
-      <button className={mic.micOn ? "recording" : ""} title="record a rule aloud; the transcript fills the rule box" onClick={mic.toggle}>🎙 Speak a rule</button>
-      <span className="hudlabel">{mic.micStatus}</span>
+      <div className="hudgroup">
+        <h3>Commons</h3>
+        <select value={p.runId} onChange={(e) => p.onPickRun(e.target.value)} title="pick a saved or live run">
+          <optgroup label="Demo">{demoRuns.map(runOpt)}</optgroup>
+          <optgroup label="All runs">{otherRuns.map(runOpt)}</optgroup>
+        </select>
+        <button title="show advanced options" onClick={() => setShowAdv((v) => !v)}>advanced</button>
+        {showAdv && (
+          <label>village nº
+            <input type="number" value={seed} style={{width: 70}}
+              title="Village number. The same number gives a similar run."
+              onChange={(e) => setSeed(+e.target.value || 0)} />
+          </label>
+        )}
+        <button title="start a new village" onClick={() => p.onStartRun(seed)}>Start a new village</button>
+      </div>
+      <div className="hudgroup">
+        <button title="play the scene (space)" onClick={p.onPlay}>{p.playing ? "pause" : "play"}</button>
+        <button title="pause / stop following a live run" onClick={p.onPause}>{pauseLabel}</button>
+        <input type="range" min={1} max={p.maxRounds} value={p.cur} className="hudslider"
+          title="round slider (left/right arrows)" onChange={(e) => p.onScrub(+e.target.value)} />
+        <span className="hudlabel">{p.roundLabel}</span>
+        <span className="hudlabel stock" key={p.statusText}>{p.statusText}</span>
+      </div>
+      <div className="hudgroup">
+        <input type="text" value={p.ruleText} placeholder="type a rule: nobody may take more than 6 fish..." className="hudrule"
+          title="rule text — check it, then enforce" onChange={(e) => p.onRuleText(e.target.value)} />
+        <button title="check what the rule means (preview only, no effect yet)" onClick={p.onParse}>Check my rule</button>
+        <button title="enforce the parsed rule on the selected live run" disabled={p.applyDisabled} onClick={p.onApply}>Enforce it</button>
+        <button className={mic.micOn ? "recording" : ""} title="record a rule aloud; the transcript fills the rule box" onClick={mic.toggle}>🎙 Speak a rule</button>
+        <span className="hudlabel">{mic.micStatus}</span>
+      </div>
       {p.preview && (
         <span className={"previewchip " + (p.preview.applied ? "applied" : "")}>
           {p.preview.applied ? "Enforced ✓ " : "Understood as: "}

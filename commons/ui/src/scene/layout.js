@@ -10,7 +10,7 @@ export function mulberry(a) {
 
 export function boatTarget(i, round, n) {
   const rnd = mulberry(i * 7919 + round * 104729 + 13);
-  const ang = -Math.PI / 2 + (i * 2 * Math.PI) / n + (rnd() - 0.5) * 0.55;
-  const rad = 0.74 + rnd() * 0.22;
+  const ang = -Math.PI / 2 + (i * 2 * Math.PI) / n + (rnd() - 0.5) * 0.3;
+  const rad = 1.0 + rnd() * 0.07;
   return {ang, rad};
 }

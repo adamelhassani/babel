@@ -6,6 +6,7 @@ import SummaryBox from "./SummaryBox";
 
 export default function Scene(props) {
   const {C, rec} = props;
+  const rootRef = useRef(null);
   const canvasRef = useRef(null);
   const sceneRef = useRef(null);
   const boatEls = useRef([]);
@@ -54,10 +55,22 @@ export default function Scene(props) {
     }
   }, [rec]);
 
+  useEffect(() => {
+    const root = rootRef.current;
+    const sc = sceneRef.current;
+    if (!root || !sc) return;
+    const hud = root.querySelector(".hud");
+    const sum = root.querySelector(".summarybox");
+    sc.setSafeArea({
+      top: (hud ? hud.offsetHeight : 0) + 8,
+      bottom: sum ? sum.offsetHeight + 56 : 40,
+    });
+  });
+
   const fishers = rec ? rec.fishers : [];
 
   return (
-    <div className="sceneview">
+    <div className="sceneview" ref={rootRef}>
       <canvas ref={canvasRef} className="scenecanvas" />
       <div className="sceneboats">
         {fishers.map((f, i) => (
@@ -66,7 +79,8 @@ export default function Scene(props) {
             className={"sceneboat" + (f.banned ? " banned" : "")}
             ref={(el) => { boatEls.current[i] = el; }}
           >
-            <div className={"bubble " + sayTint(f.say)} key={f.say}>{f.say}</div>
+            <div className={"bubble " + sayTint(f.say)} key={f.say} title={f.say}
+              onClick={(e) => e.currentTarget.classList.toggle("open")}>{f.say}</div>
             <div className="hullrow">
               <span className="hull" style={f.fined > 0 ? {boxShadow: "0 0 0 2px #f87171"} : undefined}>
                 {f.banned ? "🚫" : "🛶"}

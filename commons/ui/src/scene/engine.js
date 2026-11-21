@@ -24,6 +24,7 @@ export function createScene(canvas) {
     stamp: false, confettiDone: false,
     running: false, raf: 0, last: 0, reduced: false,
     onFrame: null, fishTarget: 0,
+    safe: {top: 96, bottom: 40, left: 80, right: 80},
   };
   for (let i = 0; i < 4; i++) {
     S.clouds.push({x: Math.random(), y: 0.06 + Math.random() * 0.16, s: 34 + Math.random() * 60, v: 0.003 + Math.random() * 0.005});
@@ -42,6 +43,7 @@ export function createScene(canvas) {
     canvas.style.width = S.W + "px";
     canvas.style.height = S.H + "px";
     ctx.setTransform(S.dpr, 0, 0, S.dpr, 0, 0);
+    layoutBoats();
   }
 
   const center = () => ({x: S.W / 2, y: S.H * 0.52});
@@ -78,6 +80,52 @@ export function createScene(canvas) {
 
   function setConfig(C) { S.C = C; }
 
+  function layoutBoats() {
+    const rec = S.rec;
+    if (!rec || !S.C || S.W === 0) return;
+    const n = rec.fishers.length;
+    const c = center(), R = baseR();
+    const rx = R * xScale(), ry = R * 0.88;
+    const ringRx = Math.max(80, Math.min(rx * 1.24, S.W / 2 - S.safe.left - 62, S.W / 2 - S.safe.right - 62));
+    const ringRy = Math.max(56, Math.min(ry * 1.24, c.y - S.safe.top - 80, S.H - S.safe.bottom - 14 - c.y));
+    const pts = [];
+    for (let i = 0; i < n; i++) {
+      const t = boatTarget(i, rec.round, n);
+      const f = rec.fishers[i].banned ? 0.93 : t.rad;
+      pts.push({x: c.x + Math.cos(t.ang) * ringRx * f, y: c.y + Math.sin(t.ang) * ringRy * f});
+    }
+    for (let k = 0; k < 4; k++) {
+      for (let i = 0; i < n; i++) {
+        for (let j = i + 1; j < n; j++) {
+          const a = pts[i], b = pts[j];
+          let dx = b.x - a.x, dy = b.y - a.y;
+          const d = Math.hypot(dx, dy), minD = 140;
+          if (d > 1e-6 && d < minD) {
+            const push = (minD - d) / 2;
+            dx /= d; dy /= d;
+            a.x -= dx * push; a.y -= dy * push;
+            b.x += dx * push; b.y += dy * push;
+          }
+        }
+      }
+    }
+    for (const p of pts) {
+      p.x = Math.max(S.safe.left + 60, Math.min(S.W - S.safe.right - 60, p.x));
+      p.y = Math.max(S.safe.top + 74, Math.min(S.H - S.safe.bottom - 12, p.y));
+    }
+    for (let i = 0; i < n; i++) {
+      const b = S.boats[i];
+      b.tx = pts[i].x;
+      b.ty = pts[i].y;
+      if (b.x === 0 && b.y === 0) { b.x = b.tx; b.y = b.ty; }
+    }
+  }
+
+  function setSafeArea(patch) {
+    Object.assign(S.safe, patch);
+    layoutBoats();
+  }
+
   function setRound(rec, prev) {
     const old = S.rec;
     S.rec = rec;
@@ -94,23 +142,12 @@ export function createScene(canvas) {
     const n = rec.fishers.length;
     while (S.boats.length < n) S.boats.push({x: 0, y: 0, tx: 0, ty: 0, phase: Math.random() * 6.28, flashUntil: -1, popAt: -1, lean: 0, leanUntil: -1, shakeUntil: -1, dipUntil: -1, docked: false, tint: ""});
     S.boats.length = n;
+    layoutBoats();
     const c = center(), R = baseR();
     for (let i = 0; i < n; i++) {
       const f = rec.fishers[i];
-      const t = boatTarget(i, rec.round, n);
       const b = S.boats[i];
       b.docked = !!f.banned;
-      const xs = xScale();
-      if (b.docked) {
-        b.tx = c.x + Math.cos(t.ang) * R * xs * 1.13;
-        b.ty = c.y + Math.sin(t.ang) * R * 0.92;
-      } else {
-        b.tx = c.x + Math.cos(t.ang) * R * xs * 1.28 * t.rad;
-        b.ty = c.y + Math.sin(t.ang) * R * 0.9 * 1.12 * t.rad;
-      }
-      b.tx = Math.max(70, Math.min(S.W - 70, b.tx));
-      b.ty = Math.max(100, Math.min(S.H - 30, b.ty));
-      if (b.x === 0 && b.y === 0) { b.x = b.tx; b.y = b.ty; }
       b.name = f.name;
       b.fined = f.fined;
       b.banned = f.banned;
@@ -442,6 +479,7 @@ export function createScene(canvas) {
     resize,
     setConfig,
     setRound,
+    setSafeArea,
     setReduced: (v) => { S.reduced = v; },
     start() {
       if (S.running) return;
