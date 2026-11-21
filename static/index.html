@@ -21,6 +21,7 @@ table{border-collapse:collapse}td{padding:1px 6px}
   <div class="panel"><h3>Oversight gap</h3><canvas id="chart"></canvas></div>
   <div class="panel"><h3>Live dictionary</h3><div id="dict"></div></div>
   <div class="panel" id="controls"><h3>Controls</h3>
+    <div id="status" style="color:#888;font-size:12px"></div>
     <label>preset <select id="preset"><option>low</option><option>high</option></select></label>
     <label>MAX_LEN <input id="maxlen" type="number" value="3" style="width:60px"></label>
     <label>NOISE <input id="noise" type="number" step="0.1" value="0" style="width:60px"></label>
@@ -76,7 +77,19 @@ function renderMap(records, games) {
   const latest = records[records.length - 1];
   const map = $("map");
   map.innerHTML = "";
-  if (!latest || !obj) return;
+  if (!latest) {
+    if (!games.length) return;
+    const wait = document.createElement("div");
+    wait.textContent = `waiting for first checkpoint (round 10) — ${games.length} games logged`;
+    map.appendChild(wait);
+    for (const g of games.slice(-5)) {
+      const div = document.createElement("div");
+      div.textContent = `${g.speaker}: "${g.message}" -> ${g.target} ${g.success ? "OK" : "miss"}`;
+      map.appendChild(div);
+    }
+    return;
+  }
+  if (!obj) return;
   for (const [v, entry] of Object.entries(latest.villages)) {
     const div = document.createElement("div");
     div.innerHTML = `<b>${v}</b> `;
@@ -114,6 +127,8 @@ function renderDict(records) {
 async function refresh() {
   if (!runId) return;
   const data = await api(`/api/run/${runId}`);
+  $("status").textContent = `run ${runId}: ${data.games.length} games, ${data.records.length} checkpoints` +
+    (data.records.length ? "" : " (chart starts at round 10)");
   drawChart(data.records);
   renderMap(data.records, data.games);
   renderDict(data.records);
