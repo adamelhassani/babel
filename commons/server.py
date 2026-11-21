@@ -28,9 +28,8 @@ app = FastAPI(title="Commons")
 
 @app.get("/")
 def index():
-    if os.path.isfile(DIST_INDEX):
-        return FileResponse(DIST_INDEX)
-    return FileResponse(os.path.join(STATIC_DIR, "index.html"))
+    path = DIST_INDEX if os.path.isfile(DIST_INDEX) else os.path.join(STATIC_DIR, "index.html")
+    return FileResponse(path, headers={"Cache-Control": "no-cache"})
 
 
 @app.get("/api/constants")
