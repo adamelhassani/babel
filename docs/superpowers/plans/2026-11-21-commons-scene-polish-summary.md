@@ -1,6 +1,6 @@
 # Commons scene polish + summary agent plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [x]`) syntax for tracking.
 
 **Goal:** Three fixes to the React scene (`commons/ui/`), from the 16:09/16:10 screenshots and feedback: (1) **center the pond** — in scene view it sits right-of-center with a big empty left area; (2) **visuals follow what the fishers say and do** — boats/bubbles/lake react to `say` and to catch/fine/ban events, not just drift; (3) a **summary box + summary agent** — a "What happened" card that an LLM writes from the run log so far, refreshed asynchronously. Plus: port the label wording just applied to the vanilla page (`2c1e213`) into the React HUD/DataView so the demo UI speaks the same language. Demo-ready before freeze; `dist/` stays committed; vanilla fallback untouched.
 
@@ -38,8 +38,8 @@ cd ../.. && export MISTRAL_API_KEY="$MISTRAL_API_KEY" && .venv/bin/python -m com
 
 **Files:** edit `src/scene/engine.js`
 
-- [ ] **Step 1:** `center()` → `{x: S.W / 2, y: S.H * 0.52}`; `baseR()` → `min(W,H) * 0.40` (min 60); boat ring multipliers stay proportional to R so the ring stays centered; verify no HUD overlap (HUD is absolute overlay, doesn't affect canvas).
-- [ ] **Step 2: Verify**
+- [x] **Step 1:** `center()` → `{x: S.W / 2, y: S.H * 0.52}`; `baseR()` → `min(W,H) * 0.40` (min 60); boat ring multipliers stay proportional to R so the ring stays centered; verify no HUD overlap (HUD is absolute overlay, doesn't affect canvas).
+- [x] **Step 2: Verify**
 
 Run: `npm run build`, node engine smoke (fake-canvas script from the scene plan): load `phase0-seed0` round 1, snapshot → assert `center` used by boats is near `(W/2, H*0.52)` (check a boat target's midpoint ≈ center). Browser: pond visually centered, boats ring symmetric.
 Expected: pond dead-center, ring symmetric, no empty left side.
@@ -48,10 +48,10 @@ Expected: pond dead-center, ring symmetric, no empty left side.
 
 **Files:** edit `src/scene/engine.js`, `src/components/Scene.jsx`, `styles.css`
 
-- [ ] **Step 1:** keyword tint in `setRound`: classify `f.say` (cooperative vs boastful) → `boat.tint` (green/amber/none), `boat.leanUntil`, set `boat.docked = f.banned`; banned boats get target at shoreline (`R*1.12` at their angle) instead of ring.
-- [ ] **Step 2:** action particles: `fined > 0` (new since prev) → shake boat 0.4 s + red ring + floating text particle "−N"; `report != catch` → purple flash (exists) + ❓ marker particle; `catch > 0` → boat dip (squash timer) + fish arcs (exist).
-- [ ] **Step 3:** draw boats with `rotate(lean)` and `scale(1, dip)` transforms; floating text particles rendered on canvas.
-- [ ] **Step 4: Verify**
+- [x] **Step 1:** keyword tint in `setRound`: classify `f.say` (cooperative vs boastful) → `boat.tint` (green/amber/none), `boat.leanUntil`, set `boat.docked = f.banned`; banned boats get target at shoreline (`R*1.12` at their angle) instead of ring.
+- [x] **Step 2:** action particles: `fined > 0` (new since prev) → shake boat 0.4 s + red ring + floating text particle "−N"; `report != catch` → purple flash (exists) + ❓ marker particle; `catch > 0` → boat dip (squash timer) + fish arcs (exist).
+- [x] **Step 3:** draw boats with `rotate(lean)` and `scale(1, dip)` transforms; floating text particles rendered on canvas.
+- [x] **Step 4: Verify**
 
 Node engine smoke: feed `seed0-004` rounds (has fines/bans from round 5) → assert some boat gets `docked`/`flashUntil` set and particles spawned. Browser: play `seed0-004` — banned boat visibly sails to shore and greys, fined boat shakes with red ring, bubbles tint by wording.
 
@@ -59,7 +59,7 @@ Node engine smoke: feed `seed0-004` rounds (has fines/bans from round 5) → ass
 
 **Files:** edit `commons/server.py`
 
-- [ ] **Step 1:** add
+- [x] **Step 1:** add
 
 ```python
 class SummarizeBody(BaseModel):
@@ -85,7 +85,7 @@ async def summarize(body: SummarizeBody):
 ```
 
 with `summarize_rounds` building a compact prompt from the records (round, stock, catches vs reports, fines, bans, rule changes, notable says) and calling `fishers.call_json(..., model=config.FISHER_MODEL, max_tokens=400, temperature=0.3)`; guard one-in-flight with an `asyncio.Lock`; wrap parser failures in HTTPException 502. Import `from . import fishers` (add) — note `call_json` sends `reasoning_effort="none"` already.
-- [ ] **Step 2: Verify**
+- [x] **Step 2: Verify**
 
 Run: TestClient with `commons.rules`-style stub of the parser (monkeypatch `fishers.call_json`) → `POST /summarize {"run_id": "phase0-seed0"}` returns 200 with `summary`, appends `runs/phase0-seed0/summary.jsonl` (delete after test); without key → 502. Real key: returns a readable 2-4 sentence summary.
 Expected: endpoint works, contract-safe (medium model, not in round loop).
@@ -94,9 +94,9 @@ Expected: endpoint works, contract-safe (medium model, not in round loop).
 
 **Files:** create `src/components/SummaryBox.jsx`; edit `api.js` (`summarize(runId, upTo)`), `App.jsx` (state + poll), `Scene.jsx`, `DataView.jsx`, `styles.css`
 
-- [ ] **Step 1:** `SummaryBox` props `{runId, round}` — card with title "What happened so far", body text, "round N" footer, refresh button; auto-refresh when `round` crosses a multiple of 5 (App effect); cache last (runId, round) to avoid refetch; loading spinner; error → toast.
-- [ ] **Step 2:** Scene view: collapsible card bottom-left (`<details>`-style toggle), above the view toggle. DataView: full panel next to Inspector.
-- [ ] **Step 3: Verify**
+- [x] **Step 1:** `SummaryBox` props `{runId, round}` — card with title "What happened so far", body text, "round N" footer, refresh button; auto-refresh when `round` crosses a multiple of 5 (App effect); cache last (runId, round) to avoid refetch; loading spinner; error → toast.
+- [x] **Step 2:** Scene view: collapsible card bottom-left (`<details>`-style toggle), above the view toggle. DataView: full panel next to Inspector.
+- [x] **Step 3: Verify**
 
 Build + browser: select `batch-no-rule-s2` → SummaryBox fills with a summary of the collapse; select a live run mid-flight → summary updates as rounds pass. TestClient: `/summarize` wired.
 
@@ -104,19 +104,19 @@ Build + browser: select `batch-no-rule-s2` → SummaryBox fills with a summary o
 
 **Files:** edit `Hud.jsx`, `TopBar.jsx`, `DataView.jsx`, `ResultsTable.jsx`, `StockChart.jsx`, `App.jsx`, `api.js`
 
-- [ ] **Step 1:** Buttons/labels exactly as in `2c1e213`: "Start a new village", "Check my rule", "Enforce it", "🎙 Speak a rule"; `advanced` toggle hiding the seed input (random default 0-9999, tooltip "Village number. The same number gives a similar run.").
-- [ ] **Step 2:** Run picker with `Demo` optgroup (the four friendly names) + `All runs`; friendly-name map shared via `src/labels.js` (also used by ResultsTable rule renames; export `FRIENDLY_RUNS`, `RULE_WORDS`, `ruleSentence(rule)`, `optionLabel(id, live)` — mirror of the vanilla implementations, single source in React).
-- [ ] **Step 3:** Rule preview as one plain sentence via `ruleSentence` ("Understood as: … Not enforced yet."; red "Nobody checks this rule." when `inspection_prob` is 0); "Rule in force:" banner; results headers "Rounds survived (of 30)" / "False reports"; chart legend "Healthy level (500)".
-- [ ] **Step 4: Verify**
+- [x] **Step 1:** Buttons/labels exactly as in `2c1e213`: "Start a new village", "Check my rule", "Enforce it", "🎙 Speak a rule"; `advanced` toggle hiding the seed input (random default 0-9999, tooltip "Village number. The same number gives a similar run.").
+- [x] **Step 2:** Run picker with `Demo` optgroup (the four friendly names) + `All runs`; friendly-name map shared via `src/labels.js` (also used by ResultsTable rule renames; export `FRIENDLY_RUNS`, `RULE_WORDS`, `ruleSentence(rule)`, `optionLabel(id, live)` — mirror of the vanilla implementations, single source in React).
+- [x] **Step 3:** Rule preview as one plain sentence via `ruleSentence` ("Understood as: … Not enforced yet."; red "Nobody checks this rule." when `inspection_prob` is 0); "Rule in force:" banner; results headers "Rounds survived (of 30)" / "False reports"; chart legend "Healthy level (500)".
+- [x] **Step 4: Verify**
 
 Build; TestClient: `/static/index.html` and `/` (React) both contain the new labels where applicable; node test of `ruleSentence` in `src/labels.js` matches vanilla output for the example rule.
 
 ### Task 6: Rebuild, verify end-to-end, update runbook
 
-- [ ] **Step 1:** `npm run build`; commit source + `dist`; TestClient smoke: `/` React shell, assets 200, all API endpoints incl. `/summarize` (stubbed) unchanged, vanilla fallback intact.
-- [ ] **Step 2:** Node engine smoke re-run (centering assertions + reactions) — must pass.
-- [ ] **Step 3:** Update the demo runbook: scene view centered pond; play "No rule (lake dies)" → boats react, lake dies with rain; "Quota with inspections (survives)" + SummaryBox narration; 📊 Data for numbers. Announce `POST /summarize` in the team channel (contracts rule).
-- [ ] **Step 4: Verify**
+- [x] **Step 1:** `npm run build`; commit source + `dist`; TestClient smoke: `/` React shell, assets 200, all API endpoints incl. `/summarize` (stubbed) unchanged, vanilla fallback intact.
+- [x] **Step 2:** Node engine smoke re-run (centering assertions + reactions) — must pass.
+- [x] **Step 3:** Update the demo runbook: scene view centered pond; play "No rule (lake dies)" → boats react, lake dies with rain; "Quota with inspections (survives)" + SummaryBox narration; 📊 Data for numbers. Announce `POST /summarize` in the team channel (contracts rule).
+- [x] **Step 4: Verify**
 
 Full smoke + `git status` shows only `commons/ui/**`, `commons/server.py`, plan docs.
 
@@ -130,9 +130,9 @@ Full smoke + `git status` shows only `commons/ui/**`, `commons/server.py`, plan 
 
 ## Verification (whole plan)
 
-- [ ] `npm run build` exits 0; `dist` committed.
-- [ ] Node engine smoke: centered layout + reaction flags fire on real run data (`seed0-004` fines/bans, `phase0-seed0` death).
-- [ ] TestClient: `/` React, `/static/index.html` vanilla labels, `/api/*` + `/run`, `/parse`, `/rule`, `/state/{id}`, `/summarize` (stubbed + keyless 502), inspector source, batch 27 rows; fallback without `dist`.
-- [ ] Browser checklist on the demo Mac: pond centered and larger; boats react to says (tint/lean) and actions (dock on ban, shake on fine, dip on catch, ❓ on lie); SummaryBox narrates the run and updates every 5 rounds; Data view has all panels with new labels; no console errors.
+- [x] `npm run build` exits 0; `dist` committed.
+- [x] Node engine smoke: centered layout + reaction flags fire on real run data (`seed0-004` fines/bans, `phase0-seed0` death).
+- [x] TestClient: `/` React, `/static/index.html` vanilla labels, `/api/*` + `/run`, `/parse`, `/rule`, `/state/{id}`, `/summarize` (stubbed + keyless 502), inspector source, batch 27 rows; fallback without `dist`.
+- [ ] Browser checklist on the demo Mac (needs a real browser — engine/labels verified headless in node): pond centered and larger; boats react to says (tint/lean) and actions (dock on ban, shake on fine, dip on catch, ❓ on lie); SummaryBox narrates the run and updates every 5 rounds; Data view has all panels with new labels; no console errors.
 
 **Definition of done:** pond centered, scene reacts to say/do, summary box narrates via the summary agent, labels consistent between React and vanilla pages, `dist` rebuilt and pushed to `origin commons` before freeze, vanilla fallback intact.

@@ -1,4 +1,5 @@
 import { boatTarget } from "./layout.js";
+import { sayTint } from "../labels.js";
 
 function lerp(a, b, t) { return a + (b - a) * t; }
 function mix(c1, c2, t) {
@@ -41,8 +42,8 @@ export function createScene(canvas) {
     ctx.setTransform(S.dpr, 0, 0, S.dpr, 0, 0);
   }
 
-  const center = () => ({x: S.W / 2, y: S.H * 0.6});
-  const baseR = () => Math.max(46, Math.min(S.W, S.H) * 0.34 * Math.sqrt(Math.max(0.03, S.health)));
+  const center = () => ({x: S.W / 2, y: S.H * 0.52});
+  const baseR = () => Math.max(60, Math.min(S.W, S.H) * 0.40 * Math.sqrt(Math.max(0.03, S.health)));
 
   function newFish() {
     return {ang: Math.random() * Math.PI * 2, rad: 0.2 + Math.random() * 0.62, sp: 0.15 + Math.random() * 0.35, sz: 3 + Math.random() * 4, ph: Math.random() * 6.28, jumpAt: S.time + 2 + Math.random() * 5};
@@ -86,23 +87,46 @@ export function createScene(canvas) {
       splash(center().x, center().y, "#64748b");
     }
     const n = rec.fishers.length;
-    while (S.boats.length < n) S.boats.push({x: 0, y: 0, tx: 0, ty: 0, phase: Math.random() * 6.28, flashUntil: -1, popAt: -1});
+    while (S.boats.length < n) S.boats.push({x: 0, y: 0, tx: 0, ty: 0, phase: Math.random() * 6.28, flashUntil: -1, popAt: -1, lean: 0, leanUntil: -1, shakeUntil: -1, dipUntil: -1, docked: false, tint: ""});
     S.boats.length = n;
     const c = center(), R = baseR();
     for (let i = 0; i < n; i++) {
       const f = rec.fishers[i];
       const t = boatTarget(i, rec.round, n);
       const b = S.boats[i];
-      b.tx = c.x + Math.cos(t.ang) * R * 1.3 * t.rad;
-      b.ty = c.y + Math.sin(t.ang) * R * 1.1 * t.rad;
+      b.docked = !!f.banned;
+      if (b.docked) {
+        b.tx = c.x + Math.cos(t.ang) * R * 1.17;
+        b.ty = c.y + Math.sin(t.ang) * R * 1.03;
+      } else {
+        b.tx = c.x + Math.cos(t.ang) * R * 1.3 * t.rad;
+        b.ty = c.y + Math.sin(t.ang) * R * 1.1 * t.rad;
+      }
       if (b.x === 0 && b.y === 0) { b.x = b.tx; b.y = b.ty; }
       b.name = f.name;
       b.fined = f.fined;
       b.banned = f.banned;
+      b.tint = sayTint(f.say);
       const pf = prev && prev.fishers ? prev.fishers[i] : null;
-      if (pf && pf.say !== f.say) b.popAt = S.time;
-      if (pf && prev.round !== rec.round && f.catch > 0) spawnCatch(i, f, c, R);
-      if (pf && prev.round !== rec.round && f.report !== f.catch) b.flashUntil = S.time + 0.7;
+      if (pf && pf.say !== f.say) {
+        b.popAt = S.time;
+        b.lean = (Math.random() - 0.5) * 0.16;
+        b.leanUntil = S.time + 0.6;
+      }
+      if (pf && prev.round !== rec.round) {
+        if (f.catch > 0) {
+          spawnCatch(i, f, c, R);
+          b.dipUntil = S.time + 0.18;
+        }
+        if (f.fined > 0 && pf.fined !== f.fined) {
+          b.shakeUntil = S.time + 0.45;
+          S.particles.push({type: "text", x: b.tx, y: b.ty - 26, vy: -46, text: "−" + f.fined, color: "#f87171", t: 0, dur: 1.1});
+        }
+        if (f.report !== f.catch) {
+          b.flashUntil = S.time + 0.7;
+          S.particles.push({type: "text", x: b.tx, y: b.ty - 32, vy: -34, text: "❓", color: "#c4b5fd", t: 0, dur: 1.4});
+        }
+      }
     }
     const prevRule = prev ? prev.rule : null;
     if (rec.rule && (!prevRule || JSON.stringify(prevRule) !== JSON.stringify(rec.rule))) {
@@ -141,9 +165,12 @@ export function createScene(canvas) {
         p.x += p.vx * dt;
         p.y += p.vy * dt;
         p.vy += 500 * dt;
+      } else if (p.type === "text") {
+        p.t += dt / p.dur;
+        p.y += p.vy * dt;
       }
     }
-    S.particles = S.particles.filter((p) => p.type === "fisharc" ? p.t < 1.05 : p.type === "drop" ? p.y < S.H + 20 : true);
+    S.particles = S.particles.filter((p) => p.type === "fisharc" ? p.t < 1.05 : p.type === "drop" ? p.y < S.H + 20 : p.type === "text" ? p.t < 1 : true);
     for (const r of S.ripples) { r.r += r.vr * dt; r.alpha -= dt * 0.5; }
     S.ripples = S.ripples.filter((r) => r.alpha > 0);
     for (const f of S.fish) {
@@ -203,9 +230,11 @@ export function createScene(canvas) {
 
   function drawBoat(b, t) {
     const y = b.y + Math.sin(t * 2 + b.phase) * 3;
-    const x = b.x + Math.cos(t * 1.7 + b.phase) * 2;
+    const x = b.x + Math.cos(t * 1.7 + b.phase) * 2 + (t < b.shakeUntil ? (Math.random() - 0.5) * 5 : 0);
     ctx.save();
     ctx.translate(x, y);
+    if (t < b.leanUntil) ctx.rotate(b.lean);
+    if (t < b.dipUntil) ctx.scale(1, 0.78);
     if (b.banned) ctx.globalAlpha = 0.45;
     if (b.fined > 0) {
       ctx.strokeStyle = `rgba(248,113,113,${0.6 + 0.4 * Math.sin(t * 6)})`;
@@ -322,6 +351,14 @@ export function createScene(canvas) {
         ctx.beginPath();
         ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2);
         ctx.fill();
+      } else if (p.type === "text") {
+        ctx.globalAlpha = Math.max(0, 1 - p.t);
+        ctx.fillStyle = p.color;
+        ctx.font = "bold 14px system-ui, sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText(p.text, p.x, p.y);
+        ctx.globalAlpha = 1;
+        ctx.textAlign = "left";
       }
     }
     for (const cf of S.confetti) {
@@ -359,7 +396,11 @@ export function createScene(canvas) {
         x: b.x, y: b.y + Math.sin(S.time * 2 + b.phase) * 3,
         name: b.name, fined: b.fined, banned: b.banned,
         flash: S.time < b.flashUntil,
+        docked: b.docked,
+        tint: b.tint,
       })),
+      center: center(),
+      particleCount: S.particles.length,
       banner: S.time < S.bannerUntil ? S.bannerText : null,
       stamp: S.stamp,
       stock: S.rec ? S.rec.stock_after : null,

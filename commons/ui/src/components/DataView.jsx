@@ -5,6 +5,7 @@ import StockChart from "./StockChart";
 import CatchChart from "./CatchChart";
 import ResultsTable from "./ResultsTable";
 import InspectorPanel from "./InspectorPanel";
+import SummaryBox from "./SummaryBox";
 
 export default function DataView(p) {
   return (
@@ -17,6 +18,7 @@ export default function DataView(p) {
         <div className="panel"><h3>Catch vs report</h3><CatchChart C={p.C} rec={p.rec} /></div>
         <div className="panel"><h3>Results (avg by rule, sorted by rounds survived)</h3><ResultsTable batch={p.batch} /></div>
         <div className="panel"><h3>Inspector</h3><InspectorPanel inspector={p.inspector} runId={p.runId} /></div>
+        <div className="panel"><h3>Summary</h3><SummaryBox summary={p.summary} onRefresh={p.refreshSummary} /></div>
       </div>
     </>
   );

@@ -1,3 +1,5 @@
+import { RULE_WORDS } from "../labels.js";
+
 const NUM_COLS = ["rounds_survived", "final_stock", "total_catch", "gini", "share_over_quota", "share_lying"];
 
 export default function ResultsTable({batch}) {
@@ -19,12 +21,12 @@ export default function ResultsTable({batch}) {
   return (
     <table>
       <thead>
-        <tr><th>rule</th><th>runs</th><th>rounds</th><th></th><th>final stock</th><th>catch</th><th>gini</th><th>over quota</th><th>lying</th></tr>
+        <tr><th>rule</th><th>runs</th><th>Rounds survived (of 30)</th><th></th><th>final stock</th><th>catch</th><th>gini</th><th>over quota</th><th>False reports</th></tr>
       </thead>
       <tbody>
         {avg.map((o, i) => (
           <tr key={o.rule_name} className={i === 0 ? "best" : ""}>
-            <td>{o.rule_name}</td>
+            <td>{RULE_WORDS[o.rule_name] || o.rule_name}</td>
             <td>{o.n}</td>
             <td>{o.rounds_survived.toFixed(1)}</td>
             <td className="barcell"><div className="minibar" style={{width: Math.max(2, (o.rounds_survived / maxRounds) * 100) + "%"}} /></td>

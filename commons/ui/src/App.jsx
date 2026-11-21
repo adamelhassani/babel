@@ -21,7 +21,27 @@ export default function App() {
   const [playing, setPlaying] = useState(false);
   const [ruleText, setRuleText] = useState("");
   const [preview, setPreview] = useState(null);
+  const [summary, setSummary] = useState(null);
   const pollCount = useRef(0);
+  const roundsRef = useRef([]);
+  const lastSummaryRound = useRef(0);
+
+  useEffect(() => { roundsRef.current = rounds; }, [rounds]);
+
+  const refreshSummary = useCallback(async () => {
+    if (!runId) return;
+    const rr = roundsRef.current;
+    const upTo = rr.length ? rr[rr.length - 1].round : 0;
+    setSummary((s) => ({...(s || {}), loading: true}));
+    try {
+      const r = await api.summarize(runId, upTo);
+      lastSummaryRound.current = r.round;
+      setSummary({round: r.round, text: r.summary, loading: false});
+    } catch (e) {
+      setSummary((s) => ({...(s || {}), loading: false}));
+      notify("summary failed: " + e.message);
+    }
+  }, [runId, notify]);
 
   const notify = useCallback((msg) => setToastMsg(msg), []);
   const hideHint = useCallback(() => setShowHint(false), []);
@@ -33,6 +53,13 @@ export default function App() {
       setCur(1);
       setRunId(id);
       setInspector(null);
+      setSummary(null);
+      lastSummaryRound.current = 0;
+      try {
+        const r = await api.summarize(id, data.rounds.length ? data.rounds[data.rounds.length - 1].round : 0);
+        lastSummaryRound.current = r.round;
+        setSummary({round: r.round, text: r.summary, loading: false});
+      } catch (e) { /* summary is best-effort */ }
     } catch (e) {
       notify("load failed: " + e.message);
     }
@@ -82,6 +109,17 @@ export default function App() {
       }
       if (pollCount.current % 5 === 0) {
         try { setBatch(await api.batch()); } catch (e) { /* keep old */ }
+        const rr = roundsRef.current;
+        if (runId && rr.length) {
+          const lastRound = rr[rr.length - 1].round;
+          if (lastRound !== lastSummaryRound.current && (lastRound % 5 === 0 || rr.length <= 6)) {
+            try {
+              const r = await api.summarize(runId, lastRound);
+              lastSummaryRound.current = r.round;
+              setSummary({round: r.round, text: r.summary, loading: false});
+            } catch (e) { /* summary is best-effort */ }
+          }
+        }
       }
     }, 1000);
     return () => clearInterval(t);
@@ -202,6 +240,7 @@ export default function App() {
     ruleText, onRuleText, onParse, onApply,
     applyDisabled: !preview || preview.applied,
     notify, onSpeak,
+    summary, refreshSummary,
   };
 
   return (

@@ -20,7 +20,7 @@ export default function StockChart({C, rounds, cur}) {
       labels,
       datasets: [
         {label: "stock", data: seen.map((r) => r.stock_after), borderColor: "#38bdf8", backgroundColor: "rgba(56,189,248,.15)", fill: true, pointRadius: 2, tension: 0.25},
-        {label: "K/2 = " + C.K / 2, data: labels.map(() => C.K / 2), borderColor: "#888", borderDash: [6, 6], pointRadius: 0, fill: false},
+        {label: "Healthy level (" + C.K / 2 + ")", data: labels.map(() => C.K / 2), borderColor: "#888", borderDash: [6, 6], pointRadius: 0, fill: false},
         {label: "rule applied", data: labels.map((l) => (markers.has(l) ? C.K * 0.97 : null)), showLine: false, pointRadius: 7, pointStyle: "triangle", pointBackgroundColor: "#fbbf24", fill: false},
       ],
     };

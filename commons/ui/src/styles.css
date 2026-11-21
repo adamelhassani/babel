@@ -253,6 +253,32 @@ canvas { max-height: 340px; }
 }
 .sceneboat.flash .bubble { background: #c4b5fd; }
 .sceneboat.flash .bubble::after { border-top-color: #c4b5fd; }
+.sceneboat .bubble.good { background: #bbf7d0; }
+.sceneboat .bubble.good::after { border-top-color: #bbf7d0; }
+.sceneboat .bubble.warn { background: #fde68a; }
+.sceneboat .bubble.warn::after { border-top-color: #fde68a; }
+
+/* summary box */
+.summarybox {
+  background: rgba(18, 26, 46, 0.92);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 10px 12px;
+  max-width: 460px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.45);
+}
+.summarybox.compact {
+  position: absolute;
+  left: 12px;
+  bottom: 46px;
+  z-index: 4;
+  width: 340px;
+  max-width: 44vw;
+}
+.sumhead { display: flex; justify-content: space-between; align-items: center; font-size: 13px; margin-bottom: 4px; }
+.sumhead button { padding: 0 7px; font-size: 13px; }
+.sumtext { font-size: 12.5px; line-height: 1.45; color: var(--text); }
+.sumround { font-size: 10.5px; color: var(--muted); margin-top: 4px; }
 @keyframes pop { from { transform: scale(0.4); opacity: 0; } }
 .sceneboat .hullrow { display: flex; align-items: center; justify-content: center; gap: 5px; }
 .sceneboat .hull { font-size: 17px; border-radius: 50%; }

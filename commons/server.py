@@ -11,6 +11,7 @@ from pydantic import BaseModel
 
 from . import audio as audiomod
 from . import config
+from . import fishers
 from . import rules as rulesmod
 from . import run as runmod
 
@@ -70,6 +71,68 @@ class SpeakBody(BaseModel):
 
 class ParseBody(BaseModel):
     text: str
+
+
+class SummarizeBody(BaseModel):
+    run_id: str
+    up_to_round: int = 0
+
+
+_summarize_lock = asyncio.Lock()
+
+
+def _rounds_brief(rounds):
+    lines = []
+    for r in rounds:
+        fish = ", ".join(
+            f"{f['name']} c{f['catch']}/r{f['report']}"
+            + ("*" if f["catch"] != f["report"] else "")
+            + (f" fined{f['fined']:.0f}" if f["fined"] else "")
+            + (" BANNED" if f["banned"] else "")
+            for f in r["fishers"]
+        )
+        rule = r["rule"]["plain_text"] if r["rule"] else "no rule"
+        lines.append(f"round {r['round']}: stock {r['stock_before']:.0f}->{r['stock_after']:.0f}, total catch {r['total_catch']}, rule: {rule}; {fish}")
+    says = [f"{f['name']}: {f['say']}" for r in rounds for f in r["fishers"] if f.get("say")]
+    if says:
+        lines.append("statements: " + " | ".join(says[-10:]))
+    return "\n".join(lines)
+
+
+async def summarize_rounds(rounds):
+    system = (
+        "You are the village storyteller. In 2-4 plain sentences, tell a stranger what happened in this "
+        "fishing-village run so far: how the lake is doing, who cheated or was punished, what the current "
+        'rule is doing. Reply with JSON only: {"summary": "<2-4 sentences>"}'
+    )
+    data = await fishers.call_json(
+        [{"role": "system", "content": system}, {"role": "user", "content": _rounds_brief(rounds)}],
+        model=config.FISHER_MODEL,
+        max_tokens=400,
+        temperature=0.3,
+    )
+    return str(data.get("summary") or data.get("text") or "")
+
+
+@app.post("/summarize")
+async def summarize(body: SummarizeBody):
+    rounds = _read_rounds(body.run_id)
+    if body.up_to_round:
+        rounds = [r for r in rounds if r["round"] <= body.up_to_round]
+    if not rounds:
+        raise HTTPException(404, f"run {body.run_id} has no rounds yet")
+    async with _summarize_lock:
+        try:
+            text = await summarize_rounds(rounds)
+        except Exception as exc:
+            raise HTTPException(502, f"summary agent failed: {exc}")
+    rec = {"run_id": body.run_id, "round": rounds[-1]["round"], "summary": text}
+    try:
+        with open(os.path.join(RUNS_DIR, body.run_id, "summary.jsonl"), "a", encoding="utf-8") as fh:
+            fh.write(json.dumps(rec) + "\n")
+    except OSError:
+        pass
+    return rec
 
 
 def _rounds_path(run_id):

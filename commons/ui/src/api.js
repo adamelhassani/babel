@@ -18,6 +18,7 @@ export const api = {
   startRun: (seed) => postJson("/run", {seed}),
   parse: (text) => postJson("/parse", {text}),
   applyRule: (runId, text) => postJson("/rule", {run_id: runId, text}),
+  summarize: (runId, upTo) => postJson("/summarize", {run_id: runId, up_to_round: upTo || 0}),
   transcribe: (buf) => req("/transcribe", {method: "POST", headers: {"Content-Type": "application/octet-stream"}, body: buf}),
   speak: (text) => fetch("/speak", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({text})}),
 };

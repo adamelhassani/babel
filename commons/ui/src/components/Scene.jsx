@@ -1,6 +1,8 @@
 import { useEffect, useRef } from "react";
 import { createScene } from "../scene/engine";
+import { sayTint } from "../labels.js";
 import Hud from "./Hud";
+import SummaryBox from "./SummaryBox";
 
 export default function Scene(props) {
   const {C, rec} = props;
@@ -63,7 +65,7 @@ export default function Scene(props) {
             className={"sceneboat" + (f.banned ? " banned" : "")}
             ref={(el) => { boatEls.current[i] = el; }}
           >
-            <div className="bubble" key={f.say}>{f.say}</div>
+            <div className={"bubble " + sayTint(f.say)} key={f.say}>{f.say}</div>
             <div className="hullrow">
               <span className="hull" style={f.fined > 0 ? {boxShadow: "0 0 0 2px #f87171"} : undefined}>
                 {f.banned ? "🚫" : "🛶"}
@@ -77,6 +79,7 @@ export default function Scene(props) {
       </div>
       <div ref={bannerRef} className="scenebanner" />
       <div ref={stampRef} className="scenestamp">LAKE DEAD</div>
+      <SummaryBox compact summary={props.summary} onRefresh={props.refreshSummary} />
       <Hud {...props} />
     </div>
   );
