@@ -53,6 +53,7 @@ async def run_sim(run_id, seed, rounds, state=None):
     last_caught_text = "(none)"
     banned_until = {}
     total_fined = {f.name: 0.0 for f in fishers}
+    caught_totals = {f.name: 0 for f in fishers}
     stocks = []
     catches_log = []
     lies = 0
@@ -104,6 +105,8 @@ async def run_sim(run_id, seed, rounds, state=None):
             fh.flush()
             stocks.append(stock_after)
             catches_log.append(total_catch)
+            for i, f in enumerate(fishers):
+                caught_totals[f.name] += catches[i]
             for i, d in enumerate(decisions):
                 fisher_rounds += 1
                 if reports[i] != catches[i]:
@@ -144,6 +147,7 @@ async def run_sim(run_id, seed, rounds, state=None):
         "seconds_per_round": elapsed / len(stocks) if stocks else 0.0,
         "total_catch_sum": sum(catches_log),
         "final_wealths": [f.wealth for f in fishers],
+        "caught_totals": list(caught_totals.values()),
         "min_wealth": min((f.wealth for f in fishers), default=0),
     }
 
