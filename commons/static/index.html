@@ -114,13 +114,17 @@ async function init() {
   C = await api("/api/constants");
   const data = await api("/api/runs");
   const picker = $("runpicker");
+  const names = [];
   for (const r of data.runs) {
+    const id = typeof r === "string" ? r : r && r.name;
+    if (!id) continue;
+    names.push(id);
     const opt = document.createElement("option");
-    opt.value = r.name;
+    opt.value = id;
+    opt.textContent = id;
     picker.appendChild(opt);
   }
-  const names = data.runs.map(r => r.name);
-  if (names.includes("phase0-seed0")) picker.value = "phase0-seed0";
+  if (names.includes("batch-D-emergency-relax-s0")) picker.value = "batch-D-emergency-relax-s0";
   else if (names.length) picker.value = names[0];
   picker.onchange = () => { liveRunId = null; followLive = true; $("pause").textContent = "pause"; hideHint(); loadRun(picker.value); };
   $("startrun").onclick = startRun;
@@ -132,7 +136,7 @@ async function init() {
   $("ruletext").oninput = () => { pendingRule = null; $("applyrule").disabled = true; };
   $("round").oninput = e => { cur = +e.target.value; pause(); hideHint(); render(); };
   await refreshPicker();
-  await loadRun(picker.value);
+  if (picker.value) await loadRun(picker.value);
   await loadResults();
   showHint();
   setInterval(poll, 1000);
@@ -200,10 +204,12 @@ async function refreshPicker() {
   const picker = $("runpicker");
   runActive = {};
   for (const r of data.runs) {
-    runActive[r.name] = r.active;
-    if (![...picker.options].some(o => o.value === r.name)) {
+    const id = typeof r === "string" ? r : r && r.name;
+    if (!id) continue;
+    runActive[id] = !!(r && r.active);
+    if (![...picker.options].some(o => o.value === id)) {
       const opt = document.createElement("option");
-      opt.value = r.name;
+      opt.value = id;
       picker.appendChild(opt);
     }
   }
