@@ -1,5 +1,4 @@
 import asyncio
-import itertools
 import json
 import os
 import random
@@ -19,14 +18,32 @@ def new_run_dir(run_id, runs_dir=None):
 
 # ---- background run registry ----
 _RUNS = {}
-_counter = itertools.count(1)
+
+
+def _fresh_run_id(base):
+    """Return base, or base-2, base-3, ... so that runs/<id> does not exist yet."""
+    run_id = base
+    n = 2
+    while os.path.exists(os.path.join(config.RUNS_DIR, run_id)):
+        run_id = f"{base}-{n}"
+        n += 1
+    return run_id
 
 
 def start_run(seed, rule=None, rounds=None, run_id=None):
     """Start a run in the background; returns run_id. Appends to
-    runs/<run_id>/rounds.jsonl as each round finishes."""
+    runs/<run_id>/rounds.jsonl as each round finishes.
+
+    Auto-generated ids are live-<HHMMSS>-s<seed>. start_run never writes into
+    a folder that already exists: the id is suffixed until the folder name is
+    free, and the folder is created before the background task starts, so
+    concurrent start_run calls cannot pick the same id.
+    """
     rounds = rounds or config.PHASE0_ROUNDS
-    run_id = run_id or f"seed{seed}-{next(_counter):03d}"
+    if run_id is None:
+        run_id = f"live-{time.strftime('%H%M%S')}-s{seed}"
+    run_id = _fresh_run_id(run_id)
+    new_run_dir(run_id)
     state = {"rule": rules.normalize_rule(rule) if rule else None, "round": 0}
     task = asyncio.create_task(run_sim(run_id, seed, rounds, state))
     _RUNS[run_id] = {"task": task, "state": state}
