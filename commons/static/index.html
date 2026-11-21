@@ -8,18 +8,22 @@
 body{font-family:system-ui,sans-serif;margin:0;background:#111;color:#eee}
 #topbar{display:flex;gap:8px;align-items:center;padding:8px;border-bottom:1px solid #333;flex-wrap:wrap}
 button,select,input{background:#222;color:#eee;border:1px solid #444;border-radius:4px;padding:4px 8px}
-.panels{display:grid;grid-template-columns:380px 1fr 1fr;gap:8px;padding:8px}
-.panel{border:1px solid #333;border-radius:8px;padding:8px;min-height:360px}
+.panels{display:grid;grid-template-columns:400px 1fr 1fr;gap:8px;padding:8px}
+.panel{border:1px solid #333;border-radius:8px;padding:8px;min-height:300px}
+.panel.lake{grid-row:span 2}
+@media (max-width:1250px){.panels{grid-template-columns:1fr 1fr}}
+@media (max-width:820px){.panels{grid-template-columns:1fr}.panel.lake{grid-row:auto}}
 h3{margin:4px 0}
 #lakebox{position:relative;width:340px;height:340px;margin:0 auto}
 #lake{position:absolute;left:40px;top:40px}
 .boat{position:absolute;transform:translate(-50%,-50%);text-align:center;width:96px}
-.boat .bubble{background:#fff;color:#111;border-radius:8px;padding:2px 6px;font-size:10px;min-height:26px;margin-bottom:2px;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
-.boat .hull{font-size:18px;line-height:1}
+.boat .bubble{background:#fff;color:#111;border-radius:8px;padding:2px 6px;font-size:11px;min-height:30px;margin-bottom:2px;display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
+.boat .hull{font-size:18px;line-height:1;border-radius:50%}
 .boat .name{font-size:10px;color:#ccc}
 #roundlabel,#status{font-size:12px;color:#aaa;white-space:nowrap}
 .rulebox{display:flex;flex-wrap:wrap;gap:4px 14px;padding:4px 10px;font-size:12px;color:#f1c40f;border-bottom:1px solid #333}
 .rulebox b{color:#eee;font-weight:600}
+#currule{padding:2px 10px;font-size:12px;color:#7fd4ff;border-bottom:1px solid #333}
 .boat .fstat{font-size:9px;color:#e74c3c;min-height:11px}
 .boat.banned{opacity:.45}
 .boat .play{font-size:10px;padding:0 5px;margin-top:1px}
@@ -31,47 +35,74 @@ button:disabled{opacity:.3}
 .panel td:first-child,.panel th:first-child{text-align:left}
 .hit{color:#2ecc71;font-weight:600}
 #micstatus{font-size:12px;color:#888}
+#hint{position:fixed;bottom:14px;left:50%;transform:translateX(-50%);background:#222;border:1px solid #444;border-radius:16px;padding:6px 14px;font-size:12px;color:#ccc;z-index:10;transition:opacity .4s;opacity:0}
+#toast{display:none;position:fixed;top:10px;right:10px;background:#7a1f1f;border:1px solid #e74c3c;color:#fff;border-radius:6px;padding:8px 12px;font-size:12px;z-index:20;max-width:380px}
 canvas{max-height:340px}
 </style>
 </head>
 <body>
 <div id="topbar">
   <h3 style="margin:0">Commons</h3>
-  <label>run <select id="runpicker"></select></label>
-  <label>seed <input id="seed" type="number" value="0" style="width:60px"></label>
-  <button id="startrun">start run</button>
-  <button id="play">play</button>
-  <button id="pause">pause</button>
-  <input id="round" type="range" min="1" max="1" value="1" style="flex:1">
+  <label>run <select id="runpicker" title="pick a saved or live run"></select></label>
+  <label>seed <input id="seed" type="number" value="0" style="width:60px" title="seed for a new run"></label>
+  <button id="startrun" title="start a live run with this seed">start run</button>
+  <button id="play" title="play the replay (space)">play</button>
+  <button id="pause" title="pause replay / stop following a live run">pause</button>
+  <input id="round" type="range" min="1" max="1" value="1" style="flex:1" title="round slider (left/right arrows)">
   <span id="roundlabel"></span>
   <span id="status"></span>
-  <input id="ruletext" type="text" placeholder="type a rule: nobody may take more than 6 fish..." style="flex:1">
-  <button id="applyrule">apply rule</button>
+  <input id="ruletext" type="text" placeholder="type a rule: nobody may take more than 6 fish..." style="flex:1" title="rule text — parse to preview, then apply">
+  <button id="parsebtn" title="parse the rule text (preview only, no effect yet)">parse</button>
+  <button id="applyrule" title="apply the parsed rule to the selected live run" disabled>apply</button>
+  <button id="mic" title="record a rule aloud; the transcript fills the rule box">● rec</button>
+  <span id="micstatus"></span>
 </div>
 <div class="rulebox" id="rulebox"></div>
+<div id="currule"></div>
 <div class="panels">
-  <div class="panel"><h3>Lake</h3>
+  <div class="panel lake"><h3>Lake</h3>
     <div id="lakebox">
-      <svg id="lake" width="260" height="260"><circle id="lakecircle" cx="130" cy="130" r="100" fill="#3498db"/></svg>
+      <svg id="lake" width="260" height="260">
+        <circle id="lakecircle" cx="130" cy="130" r="100" fill="#3498db"/>
+        <text id="laketext" x="130" y="127" text-anchor="middle" font-size="20" fill="#fff">600</text>
+        <text id="lakedead" x="130" y="150" text-anchor="middle" font-size="12" fill="#ff6b6b" style="display:none">LAKE DEAD</text>
+      </svg>
       <div id="boats"></div>
     </div>
   </div>
   <div class="panel"><h3>Stock over rounds</h3><canvas id="stockchart"></canvas></div>
   <div class="panel"><h3>Catch vs report</h3><canvas id="catchchart"></canvas></div>
-</div>
-<div class="panels">
   <div class="panel"><h3>Results (avg by rule, sorted by rounds survived)</h3><div id="resultstable"></div></div>
   <div class="panel"><h3>Inspector</h3><div id="inspectorbox"></div></div>
-  <div class="panel"><h3>Audio</h3>
-    <button id="mic">● record rule</button>
-    <span id="micstatus"></span>
-    <p style="font-size:12px;color:#888">Record a rule aloud; the transcript lands in the rule box. ▶ on a boat bubble speaks its line.</p>
-  </div>
 </div>
+<div id="hint">▶ play or scrub the round slider · pick a run top-left · parse + apply a rule</div>
+<div id="toast"></div>
 <script>
 const $ = id => document.getElementById(id);
 let C = null, rounds = [], cur = 1, timer = null, stockChart = null, catchChart = null;
-let liveRunId = null, mediaRecorder = null, micChunks = [], pollCount = 0;
+let liveRunId = null, followLive = true, runActive = {}, pendingRule = null;
+let mediaRecorder = null, micChunks = [], pollCount = 0;
+
+function toast(msg) {
+  const t = $("toast");
+  t.textContent = msg;
+  t.style.display = "block";
+  clearTimeout(t._h);
+  t._h = setTimeout(() => { t.style.display = "none"; }, 5000);
+}
+
+function showHint() {
+  const h = $("hint");
+  h.style.opacity = "1";
+  clearTimeout(h._h);
+  h._h = setTimeout(hideHint, 8000);
+}
+
+function hideHint() {
+  const h = $("hint");
+  h.style.opacity = "0";
+  setTimeout(() => { h.style.display = "none"; }, 400);
+}
 
 async function api(path) {
   const r = await fetch(path);
@@ -83,35 +114,53 @@ async function init() {
   C = await api("/api/constants");
   const data = await api("/api/runs");
   const picker = $("runpicker");
-  for (const name of data.runs) {
+  for (const r of data.runs) {
     const opt = document.createElement("option");
-    opt.value = name;
-    opt.textContent = name;
+    opt.value = r.name;
     picker.appendChild(opt);
   }
-  if (data.runs.includes("phase0-seed0")) picker.value = "phase0-seed0";
-  else if (data.runs.length) picker.value = data.runs[0];
-  picker.onchange = () => { liveRunId = null; loadRun(picker.value); };
+  const names = data.runs.map(r => r.name);
+  if (names.includes("phase0-seed0")) picker.value = "phase0-seed0";
+  else if (names.length) picker.value = names[0];
+  picker.onchange = () => { liveRunId = null; followLive = true; $("pause").textContent = "pause"; hideHint(); loadRun(picker.value); };
   $("startrun").onclick = startRun;
+  $("parsebtn").onclick = parseRule;
   $("applyrule").onclick = applyRule;
   $("mic").onclick = toggleMic;
-  $("play").onclick = play;
-  $("pause").onclick = pause;
-  $("round").oninput = e => { cur = +e.target.value; pause(); render(); };
+  $("play").onclick = () => { hideHint(); play(); };
+  $("pause").onclick = onPauseClick;
+  $("ruletext").oninput = () => { pendingRule = null; $("applyrule").disabled = true; };
+  $("round").oninput = e => { cur = +e.target.value; pause(); hideHint(); render(); };
+  await refreshPicker();
   await loadRun(picker.value);
   await loadResults();
+  showHint();
   setInterval(poll, 1000);
 }
 
 async function startRun() {
   const seed = +$("seed").value || 0;
   const r = await fetch("/run", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({seed})});
-  if (!r.ok) { $("status").textContent = "start failed: " + await r.text(); return; }
+  if (!r.ok) { toast("start failed: " + await r.text()); return; }
   const data = await r.json();
   liveRunId = data.run_id;
+  followLive = true;
+  $("pause").textContent = "pause";
+  hideHint();
   await refreshPicker();
   $("runpicker").value = liveRunId;
   try { await loadRun(liveRunId); } catch (e) { render(); }
+}
+
+async function parseRule() {
+  const text = $("ruletext").value.trim();
+  if (!text) return;
+  const r = await fetch("/parse", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({text})});
+  if (!r.ok) { toast("parse failed: " + await r.text()); return; }
+  pendingRule = (await r.json()).rule;
+  showRule(pendingRule, true);
+  $("applyrule").disabled = false;
+  $("status").textContent = "rule parsed (preview)";
 }
 
 async function applyRule() {
@@ -119,16 +168,23 @@ async function applyRule() {
   const text = $("ruletext").value.trim();
   if (!runId || !text) return;
   const r = await fetch("/rule", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({run_id: runId, text})});
-  if (!r.ok) { $("status").textContent = "rule failed: " + await r.text(); return; }
+  if (!r.ok) { toast("rule failed: " + await r.text()); return; }
   const data = await r.json();
-  showRule(data.rule);
+  pendingRule = null;
+  showRule(data.rule, false);
+  $("applyrule").disabled = true;
   $("status").textContent = "rule applied to " + runId;
   if (runId === liveRunId) poll();
 }
 
-function showRule(rule) {
+function showRule(rule, pending) {
   const box = $("rulebox");
   box.innerHTML = "";
+  const tag = document.createElement("span");
+  tag.innerHTML = pending
+    ? '<b style="color:#f1c40f">preview — not applied yet</b>'
+    : '<b style="color:#2ecc71">applied ✓</b>';
+  box.appendChild(tag);
   for (const [k, v] of Object.entries(rule)) {
     const s = document.createElement("span");
     const b = document.createElement("b");
@@ -142,13 +198,19 @@ function showRule(rule) {
 async function refreshPicker() {
   const data = await api("/api/runs");
   const picker = $("runpicker");
-  for (const name of data.runs) {
-    if (![...picker.options].some(o => o.value === name)) {
+  runActive = {};
+  for (const r of data.runs) {
+    runActive[r.name] = r.active;
+    if (![...picker.options].some(o => o.value === r.name)) {
       const opt = document.createElement("option");
-      opt.value = name;
-      opt.textContent = name;
+      opt.value = r.name;
       picker.appendChild(opt);
     }
+  }
+  for (const opt of picker.options) {
+    const live = !!runActive[opt.value];
+    opt.textContent = opt.value + (live ? " ●LIVE" : "");
+    opt.style.color = live ? "#2ecc71" : "";
   }
 }
 
@@ -165,10 +227,14 @@ async function poll() {
       rounds = data.rounds;
       const slider = $("round");
       slider.max = Math.max(1, rounds.length);
-      if (rounds.length) cur = rounds.length;
+      if (rounds.length && followLive) cur = rounds.length;
       render();
       await refreshPicker();
-      if (!data.active) liveRunId = null;
+      if (!data.active) {
+        liveRunId = null;
+        followLive = true;
+        $("pause").textContent = "pause";
+      }
     }
   }
   await loadInspector();
@@ -181,7 +247,7 @@ async function loadRun(id) {
   const slider = $("round");
   slider.min = 1;
   slider.max = Math.max(1, rounds.length);
-  cur = rounds.length;
+  cur = 1;
   slider.value = cur;
   buildBoats();
   render();
@@ -197,7 +263,7 @@ function buildBoats() {
     const ang = -Math.PI / 2 + i * 2 * Math.PI / n;
     d.style.left = (170 + 150 * Math.cos(ang)) + "px";
     d.style.top = (170 + 150 * Math.sin(ang)) + "px";
-    d.innerHTML = '<div class="bubble"></div><div class="hull">🛶</div><div class="name"></div><div class="fstat"></div><button class="play" title="speak line">▶</button>';
+    d.innerHTML = '<div class="bubble"></div><div class="hull">🛶</div><div class="name"></div><div class="fstat"></div><button class="play" title="speak this line aloud">▶</button>';
     box.appendChild(d);
   }
 }
@@ -209,11 +275,14 @@ function render() {
   $("round").value = cur;
   const dead = rec.stock_after < C.F_DEAD;
   $("roundlabel").textContent = "round " + rec.round + " / " + rounds.length;
-  $("status").textContent = (dead ? "lake dead" : "stock " + rec.stock_after) + " | " + (rec.rule ? rec.rule.plain_text : "no rule in effect");
+  $("status").textContent = dead ? "lake dead" : "stock " + rec.stock_after;
+  $("currule").textContent = rec.rule ? "in effect: " + rec.rule.plain_text : "no rule in effect";
   const circle = $("lakecircle");
   const frac = Math.max(0, Math.min(1, rec.stock_after / C.K));
   circle.setAttribute("r", (20 + 110 * Math.sqrt(frac)).toFixed(1));
   circle.setAttribute("fill", dead ? "#666" : "#3498db");
+  $("laketext").textContent = Math.round(rec.stock_after);
+  $("lakedead").style.display = dead ? "" : "none";
   const boats = $("boats").children;
   rec.fishers.forEach((f, i) => {
     if (!boats[i]) return;
@@ -221,6 +290,9 @@ function render() {
     boats[i].querySelector(".name").textContent = f.name;
     boats[i].querySelector(".fstat").textContent = f.banned ? "banned" : (f.fined > 0 ? "fined " + f.fined : "");
     boats[i].classList.toggle("banned", !!f.banned);
+    const hull = boats[i].querySelector(".hull");
+    hull.textContent = f.banned ? "🚫" : "🛶";
+    hull.style.boxShadow = f.fined > 0 ? "0 0 0 2px #e74c3c" : "";
     const pb = boats[i].querySelector(".play");
     pb.disabled = !f.say;
     pb.onclick = () => speakLine(f.say);
@@ -373,7 +445,7 @@ async function toggleMic() {
   try {
     stream = await navigator.mediaDevices.getUserMedia({audio: true});
   } catch (e) {
-    $("micstatus").textContent = "mic error: " + e.message;
+    toast("mic error: " + e.message);
     return;
   }
   micChunks = [];
@@ -385,9 +457,11 @@ async function toggleMic() {
     $("micstatus").textContent = "transcribing…";
     const blob = new Blob(micChunks, {type: mediaRecorder.mimeType || "audio/webm"});
     const r = await fetch("/transcribe", {method: "POST", headers: {"Content-Type": "application/octet-stream"}, body: await blob.arrayBuffer()});
-    if (!r.ok) { $("micstatus").textContent = "transcribe failed: " + await r.text(); return; }
+    if (!r.ok) { toast("transcribe failed: " + await r.text()); return; }
     const data = await r.json();
     $("ruletext").value = data.text;
+    pendingRule = null;
+    $("applyrule").disabled = true;
     $("micstatus").textContent = "transcript in rule box";
   };
   mediaRecorder.start();
@@ -398,7 +472,7 @@ async function toggleMic() {
 async function speakLine(text) {
   if (!text) return;
   const r = await fetch("/speak", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({text})});
-  if (!r.ok) return;
+  if (!r.ok) { toast("speak failed: " + await r.text()); return; }
   const url = URL.createObjectURL(await r.blob());
   const a = new Audio(url);
   a.onended = () => URL.revokeObjectURL(url);
@@ -419,7 +493,22 @@ function pause() {
   if (timer) { clearInterval(timer); timer = null; }
 }
 
-init().catch(e => { $("status").textContent = "error: " + e.message; });
+function onPauseClick() {
+  pause();
+  if (liveRunId) {
+    followLive = !followLive;
+    $("pause").textContent = followLive ? "pause" : "resume live";
+  }
+}
+
+document.addEventListener("keydown", e => {
+  if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
+  if (e.code === "Space") { e.preventDefault(); hideHint(); timer ? pause() : play(); }
+  if (e.key === "ArrowRight" && rounds.length) { e.preventDefault(); cur = Math.min(rounds.length, cur + 1); pause(); hideHint(); render(); }
+  if (e.key === "ArrowLeft" && rounds.length) { e.preventDefault(); cur = Math.max(1, cur - 1); pause(); hideHint(); render(); }
+});
+
+init().catch(e => { toast("init error: " + e.message); });
 </script>
 </body>
 </html>

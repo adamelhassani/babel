@@ -46,7 +46,7 @@ def list_runs():
     if os.path.isdir(RUNS_DIR):
         for name in sorted(os.listdir(RUNS_DIR)):
             if os.path.isfile(os.path.join(RUNS_DIR, name, "rounds.jsonl")):
-                runs.append(name)
+                runs.append({"name": name, "active": _run_active(name)})
     return {"runs": runs}
 
 
@@ -62,6 +62,10 @@ class RuleBody(BaseModel):
 class SpeakBody(BaseModel):
     text: str
     voice: str = audiomod.DEFAULT_VOICE
+
+
+class ParseBody(BaseModel):
+    text: str
 
 
 def _rounds_path(run_id):
@@ -109,6 +113,15 @@ async def apply_rule_text(body: RuleBody):
         raise HTTPException(502, f"rule parser failed: {exc}")
     runmod.apply_rule(body.run_id, rule)
     return {"run_id": body.run_id, "rule": rule}
+
+
+@app.post("/parse")
+async def parse_only(body: ParseBody):
+    try:
+        rule = await rulesmod.parse_rule(body.text)
+    except Exception as exc:
+        raise HTTPException(502, f"rule parser failed: {exc}")
+    return {"rule": rule}
 
 
 @app.get("/state/{run_id}")
