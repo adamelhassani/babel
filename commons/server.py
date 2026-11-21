@@ -1,12 +1,15 @@
+import asyncio
+import csv
 import json
 import os
 import re
 
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from . import audio as audiomod
 from . import config
 from . import rules as rulesmod
 from . import run as runmod
@@ -54,6 +57,11 @@ class StartBody(BaseModel):
 class RuleBody(BaseModel):
     run_id: str
     text: str
+
+
+class SpeakBody(BaseModel):
+    text: str
+    voice: str = audiomod.DEFAULT_VOICE
 
 
 def _rounds_path(run_id):
@@ -112,6 +120,54 @@ def state(run_id: str):
         "round": rounds[-1]["round"] if rounds else 0,
         "active": _run_active(run_id),
     }
+
+
+@app.get("/api/batch")
+def batch_results():
+    path = os.path.join(RUNS_DIR, "batch", "results.csv")
+    if not os.path.isfile(path):
+        raise HTTPException(404, "runs/batch/results.csv not found")
+    with open(path, newline="", encoding="utf-8") as fh:
+        rows = list(csv.DictReader(fh))
+    columns = list(rows[0].keys()) if rows else []
+    return {"columns": columns, "rows": rows}
+
+
+@app.get("/api/runs/{run_id}/inspector")
+def run_inspector(run_id: str):
+    if not RUN_ID_RE.match(run_id):
+        raise HTTPException(400, "invalid run_id")
+    path = os.path.join(RUNS_DIR, run_id, "inspector.jsonl")
+    if not os.path.isfile(path):
+        raise HTTPException(404, f"no inspector.jsonl for {run_id} yet")
+    checks = []
+    with open(path, encoding="utf-8") as fh:
+        for line in fh:
+            line = line.strip()
+            if line:
+                checks.append(json.loads(line))
+    return {"run_id": run_id, "checks": checks}
+
+
+@app.post("/transcribe")
+async def transcribe(request: Request):
+    body = await request.body()
+    if not body:
+        raise HTTPException(400, "empty audio body")
+    try:
+        text = await audiomod.transcribe(body)
+    except Exception as exc:
+        raise HTTPException(502, f"transcribe failed: {exc}")
+    return {"text": text}
+
+
+@app.post("/speak")
+async def speak(body: SpeakBody):
+    try:
+        data = await asyncio.to_thread(audiomod.speak, body.text, body.voice)
+    except Exception as exc:
+        raise HTTPException(502, f"speak failed: {exc}")
+    return Response(content=data, media_type="audio/wav")
 
 
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")

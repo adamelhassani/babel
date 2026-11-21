@@ -22,6 +22,14 @@ h3{margin:4px 0}
 .rulebox b{color:#eee;font-weight:600}
 .boat .fstat{font-size:9px;color:#e74c3c;min-height:11px}
 .boat.banned{opacity:.45}
+.boat .play{font-size:10px;padding:0 5px;margin-top:1px}
+button:disabled{opacity:.3}
+#mic.recording{background:#7a1f1f;border-color:#e74c3c}
+.panel table{border-collapse:collapse;font-size:11px}
+.panel td,.panel th{padding:1px 6px;border-bottom:1px solid #222;text-align:right}
+.panel th{color:#aaa}
+.panel td:first-child,.panel th:first-child{text-align:left}
+#micstatus{font-size:12px;color:#888}
 canvas{max-height:340px}
 </style>
 </head>
@@ -50,10 +58,19 @@ canvas{max-height:340px}
   <div class="panel"><h3>Stock over rounds</h3><canvas id="stockchart"></canvas></div>
   <div class="panel"><h3>Catch vs report</h3><canvas id="catchchart"></canvas></div>
 </div>
+<div class="panels">
+  <div class="panel"><h3>Results (avg by rule, sorted by rounds survived)</h3><div id="resultstable"></div></div>
+  <div class="panel"><h3>Inspector</h3><div id="inspectorbox"></div></div>
+  <div class="panel"><h3>Audio</h3>
+    <button id="mic">● record rule</button>
+    <span id="micstatus"></span>
+    <p style="font-size:12px;color:#888">Record a rule aloud; the transcript lands in the rule box. ▶ on a boat bubble speaks its line.</p>
+  </div>
+</div>
 <script>
 const $ = id => document.getElementById(id);
 let C = null, rounds = [], cur = 1, timer = null, stockChart = null, catchChart = null;
-let liveRunId = null, pollTimer = null;
+let liveRunId = null, mediaRecorder = null, micChunks = [], pollCount = 0;
 
 async function api(path) {
   const r = await fetch(path);
@@ -73,13 +90,16 @@ async function init() {
   }
   if (data.runs.includes("phase0-seed0")) picker.value = "phase0-seed0";
   else if (data.runs.length) picker.value = data.runs[0];
-  picker.onchange = () => { liveRunId = null; stopPoll(); loadRun(picker.value); };
+  picker.onchange = () => { liveRunId = null; loadRun(picker.value); };
   $("startrun").onclick = startRun;
   $("applyrule").onclick = applyRule;
+  $("mic").onclick = toggleMic;
   $("play").onclick = play;
   $("pause").onclick = pause;
   $("round").oninput = e => { cur = +e.target.value; pause(); render(); };
   await loadRun(picker.value);
+  await loadResults();
+  setInterval(poll, 1000);
 }
 
 async function startRun() {
@@ -91,7 +111,6 @@ async function startRun() {
   await refreshPicker();
   $("runpicker").value = liveRunId;
   try { await loadRun(liveRunId); } catch (e) { render(); }
-  startPoll();
 }
 
 async function applyRule() {
@@ -132,30 +151,27 @@ async function refreshPicker() {
   }
 }
 
-function startPoll() {
-  stopPoll();
-  pollTimer = setInterval(poll, 1000);
-}
-
-function stopPoll() {
-  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
-}
-
 async function poll() {
-  if (!liveRunId) return;
-  let data;
-  try {
-    data = await api("/state/" + encodeURIComponent(liveRunId));
-  } catch (e) {
-    return;
+  pollCount++;
+  if (liveRunId) {
+    let data;
+    try {
+      data = await api("/state/" + encodeURIComponent(liveRunId));
+    } catch (e) {
+      data = null;
+    }
+    if (data) {
+      rounds = data.rounds;
+      const slider = $("round");
+      slider.max = Math.max(1, rounds.length);
+      if (rounds.length) cur = rounds.length;
+      render();
+      await refreshPicker();
+      if (!data.active) liveRunId = null;
+    }
   }
-  rounds = data.rounds;
-  const slider = $("round");
-  slider.max = Math.max(1, rounds.length);
-  if (rounds.length) cur = rounds.length;
-  render();
-  await refreshPicker();
-  if (!data.active) stopPoll();
+  await loadInspector();
+  if (pollCount % 5 === 0) await loadResults();
 }
 
 async function loadRun(id) {
@@ -180,7 +196,7 @@ function buildBoats() {
     const ang = -Math.PI / 2 + i * 2 * Math.PI / n;
     d.style.left = (170 + 150 * Math.cos(ang)) + "px";
     d.style.top = (170 + 150 * Math.sin(ang)) + "px";
-    d.innerHTML = '<div class="bubble"></div><div class="hull">🛶</div><div class="name"></div><div class="fstat"></div>';
+    d.innerHTML = '<div class="bubble"></div><div class="hull">🛶</div><div class="name"></div><div class="fstat"></div><button class="play" title="speak line">▶</button>';
     box.appendChild(d);
   }
 }
@@ -204,6 +220,9 @@ function render() {
     boats[i].querySelector(".name").textContent = f.name;
     boats[i].querySelector(".fstat").textContent = f.banned ? "banned" : (f.fined > 0 ? "fined " + f.fined : "");
     boats[i].classList.toggle("banned", !!f.banned);
+    const pb = boats[i].querySelector(".play");
+    pb.disabled = !f.say;
+    pb.onclick = () => speakLine(f.say);
   });
   updateStockChart();
   updateCatchChart(rec);
@@ -269,6 +288,103 @@ function updateCatchChart(rec) {
     catchChart.data.datasets[2].data = line;
     catchChart.update();
   }
+}
+
+const esc = s => String(s).replace(/[&<>"]/g, c => ({"&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;"}[c]));
+
+async function loadResults() {
+  let data;
+  try {
+    data = await api("/api/batch");
+  } catch (e) {
+    $("resultstable").textContent = "no runs/batch/results.csv yet";
+    return;
+  }
+  const numCols = ["rounds_survived", "final_stock", "total_catch", "gini", "share_over_quota", "share_lying"];
+  const byRule = {};
+  for (const row of data.rows) {
+    if (!byRule[row.rule_name]) byRule[row.rule_name] = [];
+    byRule[row.rule_name].push(row);
+  }
+  const avg = Object.entries(byRule).map(([rule, rows]) => {
+    const o = {rule_name: rule, n: rows.length};
+    for (const c of numCols) o[c] = rows.reduce((s, r) => s + (parseFloat(r[c]) || 0), 0) / rows.length;
+    return o;
+  }).sort((a, b) => b.rounds_survived - a.rounds_survived);
+  let html = "<table><tr><th>rule</th><th>runs</th><th>rounds</th><th>final stock</th><th>catch</th><th>gini</th><th>over quota</th><th>lying</th></tr>";
+  for (const o of avg) {
+    html += "<tr><td>" + esc(o.rule_name) + "</td><td>" + o.n + "</td><td>" + o.rounds_survived.toFixed(1) +
+      "</td><td>" + o.final_stock.toFixed(0) + "</td><td>" + o.total_catch.toFixed(0) +
+      "</td><td>" + o.gini.toFixed(3) + "</td><td>" + (o.share_over_quota * 100).toFixed(0) +
+      "%</td><td>" + (o.share_lying * 100).toFixed(0) + "%</td></tr>";
+  }
+  $("resultstable").innerHTML = html + "</table>";
+}
+
+async function loadInspector() {
+  const runId = $("runpicker").value;
+  if (!runId) return;
+  let data;
+  try {
+    data = await api("/api/runs/" + encodeURIComponent(runId) + "/inspector");
+  } catch (e) {
+    $("inspectorbox").textContent = "inspector output not ready for " + runId + " yet";
+    return;
+  }
+  const checks = data.checks || [];
+  if (!checks.length) {
+    $("inspectorbox").textContent = "inspector output not ready for " + runId + " yet";
+    return;
+  }
+  let html = "<table><tr><th>round</th><th>accused</th><th>truly lied</th><th>precision</th><th>recall</th></tr>";
+  for (const c of checks) {
+    html += "<tr><td>" + c.round + "</td><td>" + esc((c.accused || []).join(", ") || "—") +
+      "</td><td>" + esc((c.truly_lied || []).join(", ") || "—") + "</td><td>" +
+      Number(c.precision).toFixed(2) + "</td><td>" + Number(c.recall).toFixed(2) + "</td></tr>";
+  }
+  $("inspectorbox").innerHTML = html + "</table>";
+}
+
+async function toggleMic() {
+  const btn = $("mic");
+  if (mediaRecorder && mediaRecorder.state !== "inactive") {
+    mediaRecorder.stop();
+    return;
+  }
+  let stream;
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({audio: true});
+  } catch (e) {
+    $("micstatus").textContent = "mic error: " + e.message;
+    return;
+  }
+  micChunks = [];
+  mediaRecorder = new MediaRecorder(stream);
+  mediaRecorder.ondataavailable = e => { if (e.data.size) micChunks.push(e.data); };
+  mediaRecorder.onstop = async () => {
+    stream.getTracks().forEach(t => t.stop());
+    btn.classList.remove("recording");
+    $("micstatus").textContent = "transcribing…";
+    const blob = new Blob(micChunks, {type: mediaRecorder.mimeType || "audio/webm"});
+    const r = await fetch("/transcribe", {method: "POST", headers: {"Content-Type": "application/octet-stream"}, body: await blob.arrayBuffer()});
+    if (!r.ok) { $("micstatus").textContent = "transcribe failed: " + await r.text(); return; }
+    const data = await r.json();
+    $("ruletext").value = data.text;
+    $("micstatus").textContent = "transcript in rule box";
+  };
+  mediaRecorder.start();
+  btn.classList.add("recording");
+  $("micstatus").textContent = "recording… click again to stop";
+}
+
+async function speakLine(text) {
+  if (!text) return;
+  const r = await fetch("/speak", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({text})});
+  if (!r.ok) return;
+  const url = URL.createObjectURL(await r.blob());
+  const a = new Audio(url);
+  a.onended = () => URL.revokeObjectURL(url);
+  a.play();
 }
 
 function play() {
