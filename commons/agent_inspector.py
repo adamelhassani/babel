@@ -124,11 +124,11 @@ async def ask(session, prompt):
     return getattr(r, "text", str(r))
 
 
-async def inspect_run(agent, run_dir):
+async def inspect_run(agent, run_dir, out_name="inspector_agent.jsonl"):
     run_id = os.path.basename(os.path.normpath(run_dir))
     recs = read_rounds(run_dir)
     names = {f["name"] for f in recs[0]["fishers"]}
-    out_path = os.path.join(run_dir, "inspector_agent.jsonl")
+    out_path = os.path.join(run_dir, out_name)
     session = await agent.start_session()
     scores = []
     try:
@@ -174,17 +174,17 @@ async def inspect_run(agent, run_dir):
     return run_id, scores
 
 
-async def main(run_dirs):
+async def main(run_dirs, model="mistral-medium-latest", out_name="inspector_agent.jsonl"):
     load_env_key()
     if not os.environ.get("MISTRAL_API_KEY"):
         print("MISTRAL_API_KEY missing (checked environment and .env)", file=sys.stderr)
         sys.exit(1)
-    agent = agents.Agent(model="mistral-medium-latest", name="inspector", instructions=INSTRUCTIONS)
+    agent = agents.Agent(model=model, name="inspector", instructions=INSTRUCTIONS)
     all_scores = []
     for run_dir in run_dirs:
         if not os.path.isdir(run_dir):
             run_dir = os.path.join(REPO_ROOT, "runs", run_dir)
-        run_id, scores = await inspect_run(agent, run_dir)
+        run_id, scores = await inspect_run(agent, run_dir, out_name)
         mean = sum(scores) / len(scores) if scores else 0.0
         all_scores.extend(scores)
         print(f"[{run_id}] mean score {mean:.3f} over {len(scores)} checks (baseline {BASELINE})")
@@ -192,10 +192,21 @@ async def main(run_dirs):
     print(f"OVERALL mean score {overall:.3f} over {len(all_scores)} checks (baseline {BASELINE})")
 
 
+DEFAULT_RUNS = [
+    "runs/batch-no-rule-s2",
+    "runs/batch-quota6-30pct-3x-2ban-s0",
+    "runs/batch-D-emergency-relax-s0",
+]
+
 if __name__ == "__main__":
-    dirs = sys.argv[1:] or [
-        "runs/batch-no-rule-s2",
-        "runs/batch-quota6-30pct-3x-2ban-s0",
-        "runs/batch-D-emergency-relax-s0",
-    ]
-    asyncio.run(main(dirs))
+    import argparse
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("run_dirs", nargs="*", default=DEFAULT_RUNS,
+                        help="run folders (runs/<run_id>) containing rounds.jsonl")
+    parser.add_argument("--model", default="mistral-medium-latest",
+                        help="agent model, e.g. mistral-large-4")
+    parser.add_argument("--out", default="inspector_agent.jsonl",
+                        help="output jsonl file name inside each run folder")
+    args = parser.parse_args()
+    asyncio.run(main(args.run_dirs or DEFAULT_RUNS, model=args.model, out_name=args.out))
