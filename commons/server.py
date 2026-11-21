@@ -167,6 +167,7 @@ def run_rounds(run_id: str):
 
 
 _INSPECTOR_WATCHERS = set()
+_RULE_RUN_MAP = {}  # saved run_id -> live run_id spawned for it (reused while active)
 
 
 async def _watch_inspector(run_id):
@@ -209,11 +210,16 @@ async def apply_rule_text(body: RuleBody):
     if run_id not in runmod._RUNS:
         if not RUN_ID_RE.match(run_id):
             raise HTTPException(400, "invalid run_id")
+        live = _RULE_RUN_MAP.get(body.run_id)
+        if live and live in runmod._RUNS and not runmod._RUNS[live]["task"].done():
+            runmod.apply_rule(live, rule)
+            return {"run_id": live, "rule": rule, "restarted": False, "reused": True}
         seed = body.seed
         if seed is None:
             m = re.search(r"-s(\d+)$", run_id)
             seed = int(m.group(1)) if m else 0
         run_id = runmod.start_run(seed, rule=rule)
+        _RULE_RUN_MAP[body.run_id] = run_id
         _start_inspector_watch(run_id)
         restarted = True
     else:
