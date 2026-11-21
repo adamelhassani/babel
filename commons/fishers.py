@@ -1,6 +1,7 @@
 import asyncio
 import json
 import random
+import re
 
 from mistralai.client import Mistral
 
@@ -45,6 +46,21 @@ def _content_text(content):
     return content
 
 
+def _parse_json_text(text):
+    text = (text or "").strip()
+    if text.startswith("```"):
+        text = re.sub(r"^```[a-zA-Z0-9]*\s*", "", text)
+        text = re.sub(r"\s*```$", "", text).strip()
+    if not text.startswith("{"):
+        start = text.find("{")
+        end = text.rfind("}")
+        if start != -1 and end > start:
+            text = text[start:end + 1]
+    if not text:
+        raise ValueError("empty model reply (no JSON)")
+    return json.loads(text)
+
+
 async def call_json(messages, model=None, max_tokens=None, temperature=0.7,
                     reasoning_effort=None, timeout=None):
     # Defaults are the fisher values, so fisher behaviour is unchanged.
@@ -69,7 +85,7 @@ async def call_json(messages, model=None, max_tokens=None, temperature=0.7,
                     timeout_ms=timeout_ms,
                     response_format={"type": "json_object"},
                 )
-                return json.loads(_content_text(resp.choices[0].message.content))
+                return _parse_json_text(_content_text(resp.choices[0].message.content))
             except Exception as exc:
                 last_exc = exc
         raise last_exc
