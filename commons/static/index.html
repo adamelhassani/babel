@@ -461,12 +461,12 @@ async function loadInspector() {
   try {
     data = await api("/api/runs/" + encodeURIComponent(runId) + "/inspector");
   } catch (e) {
-    $("inspectorbox").textContent = "inspector output not ready for " + runId + " yet";
+    $("inspectorbox").textContent = "no inspector checks for " + runId + " yet — run: .venv/bin/python -m commons.inspector runs/" + runId;
     return;
   }
   const checks = data.checks || [];
   if (!checks.length) {
-    $("inspectorbox").textContent = "inspector output not ready for " + runId + " yet";
+    $("inspectorbox").textContent = "no inspector checks for " + runId + " yet — run: .venv/bin/python -m commons.inspector runs/" + runId;
     return;
   }
   const last = checks[checks.length - 1];
