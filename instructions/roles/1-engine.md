@@ -2,14 +2,14 @@
 
 **Owner:** ________
 
-**You own:** `commons/config.py`, `world.py`, `rules.py`, `fishers.py`, `run.py`, `batch.py`, `requirements.txt`, `.gitignore`. Nobody else edits these; others ask you for changes.
+**You own:** `commons/config.py`, `commons/world.py`, `commons/rules.py`, `commons/fishers.py`, `commons/run.py`, `commons/batch.py`, `commons/metrics.py`, `commons/__init__.py`, `pyproject.toml`, `.gitignore`. Nobody else edits these; others ask you for changes.
 
 **You provide to Screen by 14:30:** `parse_rule(text) -> dict`, `start_run(seed, rule=None) -> run_id`, `apply_rule(run_id, rule)`.
 
 | By | Task | Done when |
 |---|---|---|
-| 14:30 | Step 1: rules, parser, tests A and B | Lake survives 30 rounds in at least 2 of 3 runs of test A |
-| 15:30 | Step 2: batch runner | `runs/batch/results.csv` has six rules x 3 seeds |
+| 14:30 | Step 1: rules, parser, tests A and B — DONE | Lake survives 30 rounds in at least 2 of 3 runs of test A |
+| 15:30 | Step 2: batch runner — DONE | `runs/batch/results.csv` has six rules x 3 seeds |
 | 16:15 | Step 3: Agents SDK backend | Works behind a flag, or skipped after 30 minutes |
 | 16:45 | Fixes only | |
 

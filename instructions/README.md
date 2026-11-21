@@ -2,6 +2,14 @@
 
 Start here. Then open your role file in `roles/`. The full plan is in `PLAN.md`.
 
+## Step 0: setup (everyone)
+
+- `git fetch origin && git checkout commons && git pull`
+- create `.venv` with Python 3.12, install the project with `pip -e .`
+- create `.env` in the repo root with `MISTRAL_API_KEY=<your key>`, by hand; it is git-ignored
+- always import with `from mistralai.client import Mistral`
+- for `mistral-large-4` use `commons.fishers.call_json` with `reasoning_effort="low"`, `max_tokens=6000`, `timeout=180`; never `"none"`
+
 ## What we are building
 
 A test bench for how AI agents behave when they share a limited resource, and which rules stop them draining it.
@@ -26,7 +34,7 @@ A test bench for how AI agents behave when they share a limited resource, and wh
 
 | Time | What |
 |---|---|
-| 14:30 | Sync 1: engine functions handed to Screen |
+| 14:45 | Sync 1: engine functions handed to Screen |
 | 15:30 | Sync 2: audio and Inspector output handed to Screen |
 | 16:15 | Sync 3: full run-through together |
 | 16:45 | Feature freeze |
@@ -59,10 +67,10 @@ A test bench for how AI agents behave when they share a limited resource, and wh
 `transcribe(bytes) -> str`, `speak(text, voice) -> bytes`.
 
 **Inspector output**, `runs/<run_id>/inspector.jsonl`, one line per check:
-`{"round", "accused": [names], "truly_lied": [names], "precision", "recall"}`.
+`{"round", "accused": [names], "truly_lied": [names], "precision", "recall", "reasons"}`.
 
 **Batch results**, `runs/batch/results.csv`:
-`rule_name, seed, rounds_survived, final_stock, total_catch, gini, share_over_quota, share_lying`.
+`rule_name, start_round, seed, rounds_survived, final_stock, total_catch, gini, share_over_quota, share_lying, min_wealth`.
 
 ## Models
 

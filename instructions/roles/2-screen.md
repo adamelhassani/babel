@@ -41,6 +41,48 @@ Wire the screen to the engine. Endpoints in server.py:
 On the page: a "start run" button, a rule text box, the parsed rule shown
 as readable fields, an "apply" button, and a marker on the stock chart at
 the round each rule took effect. Show fines and bans on the boats.
+
+The engine functions, in full (commons/rules.py and commons/run.py):
+
+```python
+# commons/rules.py
+async def parse_rule(text):
+    """One sentence -> rule JSON via mistral-medium-latest (reasoning none)."""
+    system = (
+        "You convert one sentence of village fishing rules into a JSON object with exactly these keys: "
+        "quota_per_fisher (int or null: max fish a fisher may take per round), "
+        "inspection_prob (float 0..1: chance an over-quota fisher is inspected), "
+        "fine_multiplier (float: fine = multiplier x fish over quota), "
+        "ban_rounds (int: rounds a caught cheat sits out), "
+        "tax_rate (float 0..1: share of every catch taken as tax), "
+        "closed_every (int or null: every Nth round the lake is closed), "
+        "transparency (bool: fishers see true catches instead of reports), "
+        "plain_text (string: the original sentence verbatim). "
+        "Return JSON only, no explanation."
+    )
+    user = f"Rule sentence: {text}"
+    data = await call_json(
+        [{"role": "system", "content": system}, {"role": "user", "content": user}],
+        model=config.FISHER_MODEL,
+        max_tokens=200,
+        temperature=0.0,
+    )
+    return normalize_rule({**data, "plain_text": text})
+
+# commons/run.py
+def start_run(seed, rule=None, rounds=None, run_id=None):
+    """Start a run in the background; returns run_id. Appends to
+    runs/<run_id>/rounds.jsonl as each round finishes."""
+    rounds = rounds or config.PHASE0_ROUNDS
+    run_id = run_id or f"seed{seed}-{next(_counter):03d}"
+    state = {"rule": rules.normalize_rule(rule) if rule else None, "round": 0}
+    task = asyncio.create_task(run_sim(run_id, seed, rounds, state))
+    _RUNS[run_id] = {"task": task, "state": state}
+    return run_id
+
+def apply_rule(run_id, rule):
+    """Apply a rule from the next round; it is logged in the `rule` field."""
+    _RUNS[run_id]["state"]["rule"] = rules.normalize_rule(rule) if rule else None
 ```
 
 ## Step 3 prompt (after sync 2 at 15:30)

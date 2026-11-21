@@ -17,4 +17,4 @@ dependencies = [
 dev = ["pytest", "httpx"]
 
 [tool.setuptools]
-packages = ["babel"]
+packages = ["babel", "commons"]

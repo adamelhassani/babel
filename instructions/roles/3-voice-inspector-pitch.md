@@ -25,9 +25,9 @@ Build audio.py with:
 - speak(text, voice) -> bytes using voxtral-mini-tts-3-0
 Read docs.mistral.ai/studio/audio/overview first and inspect the
 installed SDK before importing. Use `from mistralai.client import Mistral`.
-Test from the command line: transcribe a short recorded clip of someone
-saying "Nobody may take more than six fish", and write one spoken
-sentence to out.wav. Show me the transcript and the file size.
+Test from the command line as a round trip with no recorded clip:
+speak("Nobody may take more than six fish") to out.wav, then transcribe
+out.wav and print the text. Show me the transcript and the file size.
 Commit only my files and push to origin commons.
 ```
 
@@ -35,8 +35,9 @@ Commit only my files and push to origin commons.
 
 ```
 Build inspector.py. Given a run folder, for every 5th round make ONE
-mistral-large-4 call (reasoning_effort="low", max_tokens=6000, timeout
-180 s, strictly one at a time) containing only the last 5 rounds of
+mistral-large-4 call via commons.fishers.call_json (reasoning_effort="low",
+max_tokens=6000, timeout=180, strictly one at a time) containing only the
+last 5 rounds of
 public statements and REPORTED catches, the reported total, and the
 change in the public stock estimate. Never include true catches.
 Ask: which fishers do you believe took more than they reported, and why
@@ -52,9 +53,11 @@ Run it on runs/phase0-seed0 and show me the file and total seconds.
 ## Step 3 prompt
 
 ```
-Build report.py. One mistral-large-4 call (same settings) reads
-runs/batch/results.csv and ten sample statements from each rule's runs
-and writes report.md: which rule kept the lake alive, which failed and
+Build report.py. One mistral-large-4 call via commons.fishers.call_json
+(same settings: reasoning_effort="low", max_tokens=6000, timeout=180)
+reads runs/batch/results.csv and ten sample statements from each rule's
+runs and writes the report to runs/batch/report.md: which rule kept the
+lake alive, which failed and
 why, how often fishers lied under each rule, and one surprising
 observation. Under 250 words.
 ```

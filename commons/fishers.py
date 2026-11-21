@@ -32,9 +32,17 @@ def client():
     return _client
 
 
-async def call_json(messages, model=None, max_tokens=None, temperature=0.7):
+async def call_json(messages, model=None, max_tokens=None, temperature=0.7,
+                    reasoning_effort=None, timeout=None):
+    # Defaults are the fisher values, so fisher behaviour is unchanged.
+    # Other modules (e.g. the Inspector) may call e.g.
+    # call_json(msgs, model="mistral-large-4", reasoning_effort="low",
+    #           max_tokens=6000, timeout=180).
     model = model or config.FISHER_MODEL
     max_tokens = max_tokens or config.FISHER_MAX_TOKENS
+    if reasoning_effort is None:
+        reasoning_effort = config.REASONING_EFFORT
+    timeout_ms = (timeout if timeout is not None else config.FISHER_TIMEOUT_S) * 1000
     async with _semaphore:
         last_exc = None
         for _ in range(config.FISHER_RETRIES + 1):
@@ -44,7 +52,8 @@ async def call_json(messages, model=None, max_tokens=None, temperature=0.7):
                     messages=messages,
                     temperature=temperature,
                     max_tokens=max_tokens,
-                    reasoning_effort=config.REASONING_EFFORT,
+                    reasoning_effort=reasoning_effort,
+                    timeout_ms=timeout_ms,
                     response_format={"type": "json_object"},
                 )
                 return json.loads(resp.choices[0].message.content)
