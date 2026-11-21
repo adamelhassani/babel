@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { api } from "./api";
+import { ruleSentence } from "./labels";
 import Scene from "./components/Scene";
 import DataView from "./components/DataView";
 import Toast from "./components/Toast";
@@ -19,7 +20,10 @@ export default function App() {
   const [toastMsg, setToastMsg] = useState(null);
   const [showHint, setShowHint] = useState(true);
   const [playing, setPlaying] = useState(false);
+  const [speed, setSpeed] = useState(1);
+  const [selected, setSelected] = useState(null);
   const [ruleText, setRuleText] = useState("");
+  const animateRef = useRef(false);
   const [preview, setPreview] = useState(null);
   const [summary, setSummary] = useState(null);
   const pollCount = useRef(0);
@@ -141,8 +145,9 @@ export default function App() {
 
   useEffect(() => {
     if (!playing || !rounds.length) return;
-    const delay = view === "scene" ? 1100 : 700;
+    const delay = (view === "scene" ? 1900 : 700) / speed;
     const t = setInterval(() => {
+      animateRef.current = true;
       setCur((c) => {
         if (c >= rounds.length) {
           setPlaying(false);
@@ -152,14 +157,14 @@ export default function App() {
       });
     }, delay);
     return () => clearInterval(t);
-  }, [playing, rounds.length, view]);
+  }, [playing, rounds.length, view, speed]);
 
   useEffect(() => {
     const h = (e) => {
       if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
       if (e.code === "Space") { e.preventDefault(); hideHint(); setPlaying((p) => !p); }
-      if (e.key === "ArrowRight" && rounds.length) { e.preventDefault(); setPlaying(false); hideHint(); setCur((c) => Math.min(rounds.length, c + 1)); }
-      if (e.key === "ArrowLeft" && rounds.length) { e.preventDefault(); setPlaying(false); hideHint(); setCur((c) => Math.max(1, c - 1)); }
+      if (e.key === "ArrowRight" && rounds.length) { e.preventDefault(); setPlaying(false); hideHint(); animateRef.current = false; setCur((c) => Math.min(rounds.length, c + 1)); }
+      if (e.key === "ArrowLeft" && rounds.length) { e.preventDefault(); setPlaying(false); hideHint(); animateRef.current = false; setCur((c) => Math.max(1, c - 1)); }
     };
     document.addEventListener("keydown", h);
     return () => document.removeEventListener("keydown", h);
@@ -175,6 +180,45 @@ export default function App() {
   const ruleRound = rec && rec.rule
     ? (cur >= 2 && rounds[cur - 2].rule && JSON.stringify(rounds[cur - 2].rule) === JSON.stringify(rec.rule) ? null : rec.round)
     : null;
+
+  const feed = useMemo(() => {
+    if (!C || !rounds.length) return [];
+    const items = [];
+    const seen = rounds.slice(0, Math.min(cur, rounds.length));
+    let deadAnnounced = false;
+    for (let i = 0; i < seen.length; i++) {
+      const r = seen[i];
+      const prev = i > 0 ? seen[i - 1] : null;
+      if (r.rule && (!prev || !prev.rule || JSON.stringify(prev.rule) !== JSON.stringify(r.rule))) {
+        items.push({round: r.round, kind: "rule", text: "Rule in force: " + (r.rule.plain_text || ruleSentence(r.rule))});
+      }
+      items.push({round: r.round, kind: "catch", text: "total catch " + r.total_catch + " vs sustainable " + C.SUSTAINABLE_CATCH});
+      for (const f of r.fishers) {
+        const pf = prev && prev.fishers ? prev.fishers.find((x) => x.name === f.name) : null;
+        if (f.fined > 0 && (!pf || pf.fined !== f.fined)) items.push({round: r.round, kind: "fine", text: f.name + " fined " + f.fined});
+        if (f.banned && (!pf || !pf.banned)) items.push({round: r.round, kind: "ban", text: f.name + " banned this round"});
+        if (f.report !== f.catch) items.push({round: r.round, kind: "lie", text: f.name + " caught " + f.catch + " but reported " + f.report});
+      }
+      if (r.stock_after < C.F_DEAD && !deadAnnounced) {
+        deadAnnounced = true;
+        items.push({round: r.round, kind: "dead", text: "the lake died (stock " + r.stock_after + " < " + C.F_DEAD + ")"});
+      }
+    }
+    if (inspector && inspector.checks && rec) {
+      for (const c of inspector.checks) {
+        if (c.round <= rec.round) {
+          items.push({round: c.round, kind: "insp", text: "Inspector accused " + (c.accused || []).join(", ") + " (precision " + (Number(c.precision) || 0).toFixed(2) + ", recall " + (Number(c.recall) || 0).toFixed(2) + ")"});
+        }
+      }
+    }
+    return items.slice(-80).reverse();
+  }, [C, rounds, cur, inspector, rec]);
+
+  const latestCheck = useMemo(() => {
+    if (!inspector || !inspector.checks || !rec) return null;
+    const cs = inspector.checks.filter((c) => c.round <= rec.round);
+    return cs.length ? cs[cs.length - 1] : null;
+  }, [inspector, rec]);
 
   const onStartRun = async (seed) => {
     try {
@@ -222,8 +266,19 @@ export default function App() {
     setFollowLive(true);
     setPlaying(false);
     hideHint();
+    animateRef.current = false;
+    setSelected(null);
     loadRun(id);
   };
+
+  const onReplay = () => {
+    setPlaying(false);
+    animateRef.current = false;
+    hideHint();
+    setCur(1);
+  };
+
+  const onSpeed = (v) => setSpeed(v);
 
   const onSpeak = async (text) => {
     if (!text) return;
@@ -244,11 +299,14 @@ export default function App() {
   const controls = {
     C, rec, rounds, cur, batch, inspector, preview, ruleRound,
     runs, runId, onPickRun, onStartRun,
-    playing, onPlay: () => { hideHint(); setPlaying((p) => !p); },
+    playing, onPlay: () => { hideHint(); animateRef.current = true; setPlaying((p) => !p); },
     onPause: () => { setPlaying(false); if (liveRunId) setFollowLive((f) => !f); },
+    onReplay, speed, onSpeed,
+    selected, onSelectFisher: (i) => setSelected((s) => (s === i ? null : i)),
+    feed, latestCheck, animated: animateRef.current,
     liveRunId, followLive,
     maxRounds: Math.max(1, rounds.length),
-    onScrub: (v) => { setPlaying(false); hideHint(); setCur(v); },
+    onScrub: (v) => { setPlaying(false); hideHint(); animateRef.current = false; setCur(v); },
     roundLabel: rec ? "round " + rec.round + " / " + rounds.length : "",
     statusText: rec ? (rec.stock_after < C.F_DEAD ? "lake dead" : "stock " + rec.stock_after) : "",
     ruleText, onRuleText, onParse, onApply,

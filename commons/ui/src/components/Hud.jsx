@@ -37,8 +37,12 @@ export default function Hud(p) {
       <div className="hudgroup">
         <button title="play the scene (space)" onClick={p.onPlay}>{p.playing ? "pause" : "play"}</button>
         <button title="pause / stop following a live run" onClick={p.onPause}>{pauseLabel}</button>
+        <button title="replay from round 1" onClick={p.onReplay}>⏮</button>
         <input type="range" min={1} max={p.maxRounds} value={p.cur} className="hudslider"
           title="round slider (left/right arrows)" onChange={(e) => p.onScrub(+e.target.value)} />
+        <select title="playback speed" value={p.speed} onChange={(e) => p.onSpeed(+e.target.value)}>
+          {[0.5, 1, 2, 4].map((s) => <option key={s} value={s}>{s}×</option>)}
+        </select>
         <span className="hudlabel">{p.roundLabel}</span>
         <span className="hudlabel stock" key={p.statusText}>{p.statusText}</span>
       </div>

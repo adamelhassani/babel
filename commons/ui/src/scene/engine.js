@@ -24,6 +24,7 @@ export function createScene(canvas) {
     stamp: false, confettiDone: false,
     running: false, raf: 0, last: 0, reduced: false,
     onFrame: null, fishTarget: 0,
+    vis: 1, visTarget: 1, healthTarget: 1, pace: 1,
     safe: {top: 96, bottom: 40, left: 80, right: 80},
   };
   for (let i = 0; i < 4; i++) {
@@ -48,7 +49,7 @@ export function createScene(canvas) {
 
   const center = () => ({x: S.W / 2, y: S.H * 0.52});
   const R0 = () => Math.min(0.47 * S.H, 0.42 * S.W);
-  const visHealth = () => (S.C && S.C.F0 ? Math.min(1.15, Math.max(0.03, (S.rec ? S.rec.stock_after : S.C.F0) / S.C.F0)) : S.health);
+  const visHealth = () => S.vis;
   const baseR = () => Math.max(60, R0() * Math.sqrt(visHealth()));
   const xScale = () => Math.max(1, Math.min(2.2, (S.W * 0.96) / (2 * R0())));
 
@@ -56,7 +57,7 @@ export function createScene(canvas) {
     return {ang: Math.random() * Math.PI * 2, rad: 0.2 + Math.random() * 0.62, sp: 0.15 + Math.random() * 0.35, sz: 3 + Math.random() * 4, ph: Math.random() * 6.28, jumpAt: S.time + 2 + Math.random() * 5};
   }
 
-  function spawnCatch(i, f, c, R) {
+  function spawnCatch(i, f, c, R, delay) {
     const b = S.boats[i];
     const n = Math.min(Math.max(0, f.catch), 5);
     for (let k = 0; k < n; k++) {
@@ -66,7 +67,7 @@ export function createScene(canvas) {
         type: "fisharc",
         x0: c.x + Math.cos(a) * d, y0: c.y + Math.sin(a) * d * 0.55,
         x1: b.tx, y1: b.ty - 16,
-        t: -k * 0.07, dur: 0.45 + Math.random() * 0.2,
+        t: -(delay || 0) - k * 0.07, dur: 0.45 + Math.random() * 0.2,
       });
     }
   }
@@ -126,12 +127,17 @@ export function createScene(canvas) {
     layoutBoats();
   }
 
-  function setRound(rec, prev) {
+  function setPace(p) { S.pace = p || 1; }
+
+  function setRound(rec, prev, instant) {
     const old = S.rec;
     S.rec = rec;
     if (!rec || !S.C) return;
     const C = S.C;
-    S.health = Math.max(0, Math.min(1, rec.stock_after / C.K));
+    S.healthTarget = Math.max(0, Math.min(1, rec.stock_after / C.K));
+    S.visTarget = Math.min(1.15, Math.max(0.03, rec.stock_after / (C.F0 || C.K)));
+    const st = instant ? 0 : 1 / S.pace;
+    const dCatch = 0.5 * st, dRep = 0.95 * st, dCon = 1.3 * st;
     const wasDead = S.dead;
     S.dead = rec.stock_after < C.F_DEAD;
     if (S.dead && !wasDead) {
@@ -160,24 +166,24 @@ export function createScene(canvas) {
       }
       if (pf && prev.round !== rec.round) {
         if (f.catch > 0) {
-          spawnCatch(i, f, c, R);
-          b.dipUntil = S.time + 0.18;
+          spawnCatch(i, f, c, R, dCatch);
+          b.dipUntil = S.time + dCatch + 0.18;
         }
         if (f.fined > 0 && pf.fined !== f.fined) {
-          b.shakeUntil = S.time + 0.45;
-          S.particles.push({type: "text", x: b.tx, y: b.ty - 26, vy: -46, text: "−" + f.fined, color: "#f87171", t: 0, dur: 1.1});
+          b.shakeUntil = S.time + dCon + 0.45;
+          S.particles.push({type: "text", x: b.tx, y: b.ty - 26, vy: -46, text: "−" + f.fined, color: "#f87171", t: -dCon, dur: 1.1});
         }
         if (f.report !== f.catch) {
-          b.flashUntil = S.time + 0.7;
-          S.particles.push({type: "text", x: b.tx, y: b.ty - 32, vy: -34, text: "❓", color: "#c4b5fd", t: 0, dur: 1.4});
+          b.flashUntil = S.time + dRep + 0.7;
+          S.particles.push({type: "text", x: b.tx, y: b.ty - 32, vy: -34, text: "❓", color: "#c4b5fd", t: -dRep, dur: 1.4});
         }
       }
     }
     const prevRule = prev ? prev.rule : null;
     if (rec.rule && (!prevRule || JSON.stringify(prevRule) !== JSON.stringify(rec.rule))) {
-      S.goldenUntil = S.time + 1.4;
+      S.goldenUntil = S.time + dCon + 1.4;
       S.bannerText = rec.rule.plain_text;
-      S.bannerUntil = S.time + 3.5;
+      S.bannerUntil = S.time + dCon + 3.5;
       for (let k = 0; k < 3; k++) {
         S.ripples.push({x: c.x, y: c.y, r: 8 + k * 14, vr: 240 - k * 45, alpha: 0.85, color: "251,191,36"});
       }
@@ -188,13 +194,15 @@ export function createScene(canvas) {
         S.confetti.push({x: Math.random() * S.W, y: -20 - Math.random() * S.H * 0.5, vx: (Math.random() - 0.5) * 2.2, vy: 2 + Math.random() * 3, rot: Math.random() * 6.28, vr: (Math.random() - 0.5) * 9, size: 4 + Math.random() * 5, color: `hsl(${Math.floor(Math.random() * 360)},80%,60%)`});
       }
     }
-    S.fishTarget = Math.round(S.health * 40);
+    S.fishTarget = Math.round(S.healthTarget * 56);
     while (S.fish.length < S.fishTarget) S.fish.push(newFish());
     if (S.fish.length > S.fishTarget) S.fish.length = S.fishTarget;
     if (old !== rec && S.reduced) renderOnce();
   }
 
   function update(dt) {
+    S.health += (S.healthTarget - S.health) * Math.min(1, dt * 2.4);
+    S.vis += (S.visTarget - S.vis) * Math.min(1, dt * 2.0);
     for (const b of S.boats) {
       b.x += (b.tx - b.x) * Math.min(1, dt * 2.6);
       b.y += (b.ty - b.y) * Math.min(1, dt * 2.6);
@@ -274,7 +282,7 @@ export function createScene(canvas) {
     ctx.restore();
   }
 
-  function drawBoat(b, t) {
+  function drawBoat(b, t, i) {
     const y = b.y + Math.sin(t * 2 + b.phase) * 3;
     const x = b.x + Math.cos(t * 1.7 + b.phase) * 2 + (t < b.shakeUntil ? (Math.random() - 0.5) * 5 : 0);
     ctx.save();
@@ -289,7 +297,7 @@ export function createScene(canvas) {
       ctx.arc(0, -6, 17, 0, Math.PI * 2);
       ctx.stroke();
     }
-    ctx.fillStyle = b.banned ? "#6b7280" : "#92400e";
+    ctx.fillStyle = b.banned ? "#6b7280" : `hsl(${(i * 47) % 360}, 55%, 38%)`;
     ctx.beginPath();
     ctx.moveTo(-14, 0);
     ctx.quadraticCurveTo(0, 11, 14, 0);
@@ -297,7 +305,7 @@ export function createScene(canvas) {
     ctx.lineTo(-10, -7);
     ctx.closePath();
     ctx.fill();
-    ctx.fillStyle = "#fcd34d";
+    ctx.fillStyle = b.banned ? "#9ca3af" : `hsl(${(i * 47) % 360}, 75%, 62%)`;
     ctx.beginPath();
     ctx.arc(0, -11, 4.2, 0, Math.PI * 2);
     ctx.fill();
@@ -367,6 +375,24 @@ export function createScene(canvas) {
       const fy = c.y + Math.sin(f.ang * 1.3 + f.ph) * R * f.rad * 0.45;
       drawFish(fx, fy, f.sz, f.ang, "rgba(2,40,60,0.55)");
     }
+    if (S.dead) {
+      for (let k = 0; k < 6; k++) {
+        const a = k * 1.13 + 0.7;
+        drawFish(c.x + Math.cos(a) * R * xScale() * 0.45, c.y + Math.sin(a) * R * 0.3, 5, Math.PI, "rgba(165,165,170,0.55)");
+      }
+    }
+    if (bad > 0.35) {
+      ctx.fillStyle = `rgba(74,94,44,${(bad - 0.35) * 0.5})`;
+      for (let k = 0; k < 8; k++) {
+        const a = k * 2.39;
+        ctx.beginPath();
+        ctx.ellipse(c.x + Math.cos(a) * R * xScale() * 0.55, c.y + Math.sin(a) * R * 0.45, R * 0.16, R * 0.07, a, 0, Math.PI * 2);
+        ctx.fill();
+      }
+      blobPath(c, R, t);
+      ctx.fillStyle = `rgba(120,90,40,${bad * 0.15})`;
+      ctx.fill();
+    }
     if (t < S.goldenUntil) {
       const gg = ctx.createRadialGradient(c.x, c.y, 0, c.x, c.y, R * 1.2);
       gg.addColorStop(0, `rgba(251,191,36,${0.35 * (S.goldenUntil - t)})`);
@@ -385,6 +411,7 @@ export function createScene(canvas) {
     }
 
     for (const p of S.particles) {
+      if (p.t != null && p.t < 0) continue;
       if (p.type === "fisharc") {
         const u = Math.max(0, Math.min(1, p.t));
         const mx = (p.x0 + p.x1) / 2, my = Math.min(p.y0, p.y1) - 90;
@@ -416,7 +443,7 @@ export function createScene(canvas) {
       ctx.restore();
     }
 
-    for (const b of S.boats) drawBoat(b, t);
+    S.boats.forEach((b, i) => drawBoat(b, t, i));
 
     if (S.dead) {
       ctx.strokeStyle = "rgba(180,200,230,0.35)";
@@ -480,6 +507,7 @@ export function createScene(canvas) {
     setConfig,
     setRound,
     setSafeArea,
+    setPace,
     setReduced: (v) => { S.reduced = v; },
     start() {
       if (S.running) return;
