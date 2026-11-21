@@ -197,8 +197,18 @@ async function applyRule() {
   pendingRule = null;
   showRule(data.rule, false);
   $("applyrule").disabled = true;
-  $("status").textContent = "rule applied to " + runId;
-  if (runId === liveRunId) poll();
+  if (data.run_id && data.run_id !== runId) {
+    liveRunId = data.run_id;
+    followLive = true;
+    await refreshPicker();
+    $("runpicker").value = data.run_id;
+    try { await loadRun(data.run_id); } catch (e) { render(); }
+    $("status").textContent = "saved run is read-only; started new live run " + data.run_id + " with the rule applied";
+    poll();
+  } else {
+    $("status").textContent = "rule applied to " + runId;
+    if (runId === liveRunId) poll();
+  }
 }
 
 function ruleSentence(rule) {

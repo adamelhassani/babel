@@ -62,6 +62,7 @@ class StartBody(BaseModel):
 class RuleBody(BaseModel):
     run_id: str
     text: str
+    seed: int | None = None
 
 
 class SpeakBody(BaseModel):
@@ -172,14 +173,24 @@ async def start(body: StartBody):
 
 @app.post("/rule")
 async def apply_rule_text(body: RuleBody):
-    if body.run_id not in runmod._RUNS:
-        raise HTTPException(404, f"run {body.run_id} is not active in this server process")
     try:
         rule = await rulesmod.parse_rule(body.text)
     except Exception as exc:
         raise HTTPException(502, f"rule parser failed: {exc}")
-    runmod.apply_rule(body.run_id, rule)
-    return {"run_id": body.run_id, "rule": rule}
+    run_id = body.run_id
+    restarted = False
+    if run_id not in runmod._RUNS:
+        if not RUN_ID_RE.match(run_id):
+            raise HTTPException(400, "invalid run_id")
+        seed = body.seed
+        if seed is None:
+            m = re.search(r"-s(\d+)$", run_id)
+            seed = int(m.group(1)) if m else 0
+        run_id = runmod.start_run(seed, rule=rule)
+        restarted = True
+    else:
+        runmod.apply_rule(run_id, rule)
+    return {"run_id": run_id, "rule": rule, "restarted": restarted}
 
 
 @app.post("/parse")
