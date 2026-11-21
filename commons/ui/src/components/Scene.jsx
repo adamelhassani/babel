@@ -36,9 +36,10 @@ export default function Scene(props) {
     sc.resize();
     const ro = new ResizeObserver(() => sc.resize());
     ro.observe(canvasRef.current);
+    window.addEventListener("resize", sc.resize);
     sc.start();
     sceneRef.current = sc;
-    return () => { ro.disconnect(); sc.stop(); };
+    return () => { ro.disconnect(); window.removeEventListener("resize", sc.resize); sc.stop(); };
   }, []);
 
   useEffect(() => {

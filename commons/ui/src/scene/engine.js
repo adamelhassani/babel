@@ -35,15 +35,19 @@ export function createScene(canvas) {
   function resize() {
     const win = typeof window !== "undefined" ? window : {devicePixelRatio: 1, innerWidth: 800, innerHeight: 600};
     S.dpr = Math.min(2, win.devicePixelRatio || 1);
-    S.W = canvas.clientWidth || win.innerWidth;
-    S.H = canvas.clientHeight || win.innerHeight;
+    S.W = win.innerWidth || canvas.clientWidth || 800;
+    S.H = win.innerHeight || canvas.clientHeight || 600;
     canvas.width = Math.round(S.W * S.dpr);
     canvas.height = Math.round(S.H * S.dpr);
+    canvas.style.width = S.W + "px";
+    canvas.style.height = S.H + "px";
     ctx.setTransform(S.dpr, 0, 0, S.dpr, 0, 0);
   }
 
   const center = () => ({x: S.W / 2, y: S.H * 0.52});
-  const baseR = () => Math.max(60, Math.min(S.W, S.H) * 0.40 * Math.sqrt(Math.max(0.03, S.health)));
+  const R0 = () => Math.min(0.47 * S.H, 0.42 * S.W);
+  const baseR = () => Math.max(60, R0() * Math.sqrt(Math.max(0.03, S.health)));
+  const xScale = () => Math.max(1, Math.min(2.2, (S.W * 0.96) / (2 * R0())));
 
   function newFish() {
     return {ang: Math.random() * Math.PI * 2, rad: 0.2 + Math.random() * 0.62, sp: 0.15 + Math.random() * 0.35, sz: 3 + Math.random() * 4, ph: Math.random() * 6.28, jumpAt: S.time + 2 + Math.random() * 5};
@@ -95,13 +99,16 @@ export function createScene(canvas) {
       const t = boatTarget(i, rec.round, n);
       const b = S.boats[i];
       b.docked = !!f.banned;
+      const xs = xScale();
       if (b.docked) {
-        b.tx = c.x + Math.cos(t.ang) * R * 1.17;
-        b.ty = c.y + Math.sin(t.ang) * R * 1.03;
+        b.tx = c.x + Math.cos(t.ang) * R * xs * 1.13;
+        b.ty = c.y + Math.sin(t.ang) * R * 0.92;
       } else {
-        b.tx = c.x + Math.cos(t.ang) * R * 1.3 * t.rad;
-        b.ty = c.y + Math.sin(t.ang) * R * 1.1 * t.rad;
+        b.tx = c.x + Math.cos(t.ang) * R * xs * 1.28 * t.rad;
+        b.ty = c.y + Math.sin(t.ang) * R * 0.9 * 1.12 * t.rad;
       }
+      b.tx = Math.max(70, Math.min(S.W - 70, b.tx));
+      b.ty = Math.max(100, Math.min(S.H - 30, b.ty));
       if (b.x === 0 && b.y === 0) { b.x = b.tx; b.y = b.ty; }
       b.name = f.name;
       b.fined = f.fined;
@@ -199,11 +206,12 @@ export function createScene(canvas) {
   }
 
   function blobPath(c, R, t) {
+    const xs = xScale();
     ctx.beginPath();
     for (let k = 0; k <= 72; k++) {
       const a = (k / 72) * Math.PI * 2;
       const r = R * (1 + 0.05 * Math.sin(3 * a + t * 0.9) + 0.035 * Math.sin(5 * a - t * 1.4) + 0.02 * Math.sin(8 * a + t * 0.6));
-      const x = c.x + Math.cos(a) * r;
+      const x = c.x + Math.cos(a) * r * xs;
       const y = c.y + Math.sin(a) * r * 0.82;
       if (k === 0) ctx.moveTo(x, y);
       else ctx.lineTo(x, y);
@@ -317,8 +325,8 @@ export function createScene(canvas) {
       ctx.stroke();
     }
     for (const f of S.fish) {
-      const fx = c.x + Math.cos(f.ang) * R * f.rad;
-      const fy = c.y + Math.sin(f.ang * 1.3 + f.ph) * R * f.rad * 0.55;
+      const fx = c.x + Math.cos(f.ang) * R * xScale() * f.rad;
+      const fy = c.y + Math.sin(f.ang * 1.3 + f.ph) * R * f.rad * 0.45;
       drawFish(fx, fy, f.sz, f.ang, "rgba(2,40,60,0.55)");
     }
     if (t < S.goldenUntil) {
