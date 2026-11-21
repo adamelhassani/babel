@@ -14,7 +14,47 @@ from . import config
 CSV_COLUMNS = [
     "rule_name", "start_round", "seed", "rounds_survived", "final_stock",
     "total_catch", "gini", "share_over_quota", "share_lying", "min_wealth",
+    "share_caught", "total_fines", "share_banned", "share_closed", "catch_pre", "catch_post",
 ]
+
+
+def enforcement_from_recs(recs):
+    """Enforcement impact of the rule on fishing, computed purely from a rounds log:
+    share of fisher-rounds caught (fined>0), total fines, share banned, share of closed
+    rounds, and mean total catch per round before vs after the rule started."""
+    fisher_rounds = 0
+    caught = 0
+    banned = 0
+    fines = 0.0
+    closed = 0
+    pre_sum = pre_n = post_sum = post_n = 0
+    rule_start = next((r["round"] for r in recs if r.get("rule")), None)
+    for r in recs:
+        rule = r.get("rule") or {}
+        ce = rule.get("closed_every")
+        if ce and r["round"] % ce == 0:
+            closed += 1
+        for f in r["fishers"]:
+            fisher_rounds += 1
+            if f.get("fined", 0) > 0:
+                caught += 1
+                fines += f["fined"]
+            if f.get("banned"):
+                banned += 1
+        if rule_start is not None and r["round"] >= rule_start:
+            post_sum += r["total_catch"]
+            post_n += 1
+        else:
+            pre_sum += r["total_catch"]
+            pre_n += 1
+    return {
+        "share_caught": round(caught / fisher_rounds, 4) if fisher_rounds else 0.0,
+        "total_fines": round(fines, 1),
+        "share_banned": round(banned / fisher_rounds, 4) if fisher_rounds else 0.0,
+        "share_closed": round(closed / len(recs), 4) if recs else 0.0,
+        "catch_pre": round(pre_sum / pre_n, 1) if pre_n else 0.0,
+        "catch_post": round(post_sum / post_n, 1) if post_n else 0.0,
+    }
 
 
 def gini(values):
@@ -43,6 +83,12 @@ def run_row(rule_name, start_round, seed, res):
         "share_over_quota": round(res["over_quota_share"], 4),
         "share_lying": round(res["lie_share"], 4),
         "min_wealth": res["min_wealth"],
+        "share_caught": round(res.get("share_caught", 0.0), 4),
+        "total_fines": round(res.get("total_fines", 0.0), 1),
+        "share_banned": round(res.get("share_banned", 0.0), 4),
+        "share_closed": round(res.get("share_closed", 0.0), 4),
+        "catch_pre": round(res.get("catch_pre", 0.0), 1),
+        "catch_post": round(res.get("catch_post", 0.0), 1),
     }
 
 
@@ -77,6 +123,7 @@ def row_from_log(run_dir, rule_name, start_round, seed):
         "share_over_quota": round(over_q / fisher_rounds, 4) if fisher_rounds else 0.0,
         "share_lying": round(lies / fisher_rounds, 4) if fisher_rounds else 0.0,
         "min_wealth": min(f["wealth"] for f in last["fishers"]),
+        **enforcement_from_recs(recs),
     }
 
 
@@ -136,6 +183,12 @@ def summarize(rows):
             "share_over_quota": round(sum(r["share_over_quota"] for r in rs) / n, 4),
             "share_lying": round(sum(r["share_lying"] for r in rs) / n, 4),
             "min_wealth": round(sum(r["min_wealth"] for r in rs) / n, 1),
+            "share_caught": round(sum(r["share_caught"] for r in rs) / n, 4),
+            "total_fines": round(sum(r["total_fines"] for r in rs) / n, 1),
+            "share_banned": round(sum(r["share_banned"] for r in rs) / n, 4),
+            "share_closed": round(sum(r["share_closed"] for r in rs) / n, 4),
+            "catch_pre": round(sum(r["catch_pre"] for r in rs) / n, 1),
+            "catch_post": round(sum(r["catch_post"] for r in rs) / n, 1),
         })
     return out
 

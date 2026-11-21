@@ -79,6 +79,10 @@ async def run_sim(run_id, seed, rounds, state=None):
     caught_names = []
     samples = []
     dead_round = None
+    rule_start = None
+    caught_fr = banned_fr = closed_rounds = 0
+    total_fines_sum = 0.0
+    pre_sum = pre_n = post_sum = post_n = 0
     start = time.time()
     try:
         for rnd in range(1, rounds + 1):
@@ -99,8 +103,24 @@ async def run_sim(run_id, seed, rounds, state=None):
             ])
             catches, reports, fines, caught, closed, tax = world.enforce_rule(
                 rule, rnd, fishers, decisions, banned_until, rng)
+            if rule is not None and rule_start is None:
+                rule_start = rnd
+            if closed:
+                closed_rounds += 1
+            for i, f in enumerate(fishers):
+                if fines[i] > 0:
+                    caught_fr += 1
+                    total_fines_sum += fines[i]
+                if banned_until.get(f.name, 0) >= rnd:
+                    banned_fr += 1
             stock_after, catches, total_catch, wealths, dead = world.apply_round(
                 stock_before, catches, [f.wealth for f in fishers])
+            if rule_start is not None and rnd >= rule_start:
+                post_sum += total_catch
+                post_n += 1
+            else:
+                pre_sum += total_catch
+                pre_n += 1
             for i, (f, w) in enumerate(zip(fishers, wealths)):
                 f.wealth = w - tax[i] - fines[i]
                 total_fined[f.name] += fines[i]
@@ -166,6 +186,12 @@ async def run_sim(run_id, seed, rounds, state=None):
         "final_wealths": [f.wealth for f in fishers],
         "caught_totals": list(caught_totals.values()),
         "min_wealth": min((f.wealth for f in fishers), default=0),
+        "share_caught": caught_fr / fisher_rounds if fisher_rounds else 0.0,
+        "total_fines": total_fines_sum,
+        "share_banned": banned_fr / fisher_rounds if fisher_rounds else 0.0,
+        "share_closed": closed_rounds / len(stocks) if stocks else 0.0,
+        "catch_pre": pre_sum / pre_n if pre_n else 0.0,
+        "catch_post": post_sum / post_n if post_n else 0.0,
     }
 
 

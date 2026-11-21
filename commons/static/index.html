@@ -428,7 +428,8 @@ async function loadResults() {
     $("resultstable").textContent = "no runs/batch/results.csv yet";
     return;
   }
-  const numCols = ["rounds_survived", "final_stock", "total_catch", "gini", "share_over_quota", "share_lying"];
+  const numCols = ["rounds_survived", "final_stock", "total_catch", "gini", "share_over_quota", "share_lying",
+    "share_caught", "total_fines", "share_banned", "share_closed", "catch_pre", "catch_post"];
   const byRule = {};
   for (const row of data.rows) {
     if (!byRule[row.rule_name]) byRule[row.rule_name] = [];
@@ -439,12 +440,16 @@ async function loadResults() {
     for (const c of numCols) o[c] = rows.reduce((s, r) => s + (parseFloat(r[c]) || 0), 0) / rows.length;
     return o;
   }).sort((a, b) => b.rounds_survived - a.rounds_survived);
-  let html = "<table><tr><th>rule</th><th>runs</th><th>Rounds survived (of 30)</th><th>final stock</th><th>catch</th><th>gini</th><th>over quota</th><th>False reports</th></tr>";
+  let html = "<table><tr><th>rule</th><th>runs</th><th>Rounds survived (of 30)</th><th>final stock</th><th>catch</th><th>gini</th><th>over quota</th><th>False reports</th><th>caught</th><th>fines</th><th>banned</th><th>closed</th><th>catch pre&rarr;post</th></tr>";
+  const pct = (v) => (v === null || v === undefined || isNaN(v)) ? "&ndash;" : (v * 100).toFixed(0) + "%";
   for (const o of avg) {
     html += "<tr><td>" + esc(RULE_WORDS[o.rule_name] || o.rule_name) + "</td><td>" + o.n + "</td><td>" + o.rounds_survived.toFixed(1) +
       "</td><td>" + o.final_stock.toFixed(0) + "</td><td>" + o.total_catch.toFixed(0) +
-      "</td><td>" + o.gini.toFixed(3) + "</td><td>" + (o.share_over_quota * 100).toFixed(0) +
-      "%</td><td>" + (o.share_lying * 100).toFixed(0) + "%</td></tr>";
+      "</td><td>" + o.gini.toFixed(3) + "</td><td>" + pct(o.share_over_quota) +
+      "</td><td>" + pct(o.share_lying) + "</td><td>" + pct(o.share_caught) +
+      "</td><td>" + (o.total_fines ? o.total_fines.toFixed(0) : "&ndash;") +
+      "</td><td>" + pct(o.share_banned) + "</td><td>" + pct(o.share_closed) +
+      "</td><td>" + (o.catch_pre || o.catch_post ? o.catch_pre.toFixed(0) + "&rarr;" + o.catch_post.toFixed(0) : "&ndash;") + "</td></tr>";
   }
   $("resultstable").innerHTML = html + "</table>";
 }

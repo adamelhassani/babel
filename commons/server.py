@@ -215,12 +215,26 @@ def state(run_id: str):
 
 @app.get("/api/batch")
 def batch_results():
+    from . import metrics
+
     path = os.path.join(RUNS_DIR, "batch", "results.csv")
     if not os.path.isfile(path):
         raise HTTPException(404, "runs/batch/results.csv not found")
     with open(path, newline="", encoding="utf-8") as fh:
         rows = list(csv.DictReader(fh))
+    new_cols = ["share_caught", "total_fines", "share_banned", "share_closed", "catch_pre", "catch_post"]
+    for row in rows:
+        if any(row.get(c) in (None, "") for c in new_cols):
+            log = os.path.join(RUNS_DIR, f"batch-{row['rule_name']}-s{row['seed']}", "rounds.jsonl")
+            if os.path.isfile(log):
+                with open(log, encoding="utf-8") as fh:
+                    recs = [json.loads(l) for l in fh if l.strip()]
+                for c, v in metrics.enforcement_from_recs(recs).items():
+                    row[c] = v
     columns = list(rows[0].keys()) if rows else []
+    for c in new_cols:
+        if c not in columns:
+            columns.append(c)
     return {"columns": columns, "rows": rows}
 
 
