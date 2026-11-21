@@ -18,6 +18,10 @@ h3{margin:4px 0}
 .boat .hull{font-size:18px;line-height:1}
 .boat .name{font-size:10px;color:#ccc}
 #roundlabel,#status{font-size:12px;color:#aaa;white-space:nowrap}
+.rulebox{display:flex;flex-wrap:wrap;gap:4px 14px;padding:4px 10px;font-size:12px;color:#f1c40f;border-bottom:1px solid #333}
+.rulebox b{color:#eee;font-weight:600}
+.boat .fstat{font-size:9px;color:#e74c3c;min-height:11px}
+.boat.banned{opacity:.45}
 canvas{max-height:340px}
 </style>
 </head>
@@ -25,12 +29,17 @@ canvas{max-height:340px}
 <div id="topbar">
   <h3 style="margin:0">Commons</h3>
   <label>run <select id="runpicker"></select></label>
+  <label>seed <input id="seed" type="number" value="0" style="width:60px"></label>
+  <button id="startrun">start run</button>
   <button id="play">play</button>
   <button id="pause">pause</button>
   <input id="round" type="range" min="1" max="1" value="1" style="flex:1">
   <span id="roundlabel"></span>
   <span id="status"></span>
+  <input id="ruletext" type="text" placeholder="type a rule: nobody may take more than 6 fish..." style="flex:1">
+  <button id="applyrule">apply rule</button>
 </div>
+<div class="rulebox" id="rulebox"></div>
 <div class="panels">
   <div class="panel"><h3>Lake</h3>
     <div id="lakebox">
@@ -44,6 +53,7 @@ canvas{max-height:340px}
 <script>
 const $ = id => document.getElementById(id);
 let C = null, rounds = [], cur = 1, timer = null, stockChart = null, catchChart = null;
+let liveRunId = null, pollTimer = null;
 
 async function api(path) {
   const r = await fetch(path);
@@ -63,11 +73,89 @@ async function init() {
   }
   if (data.runs.includes("phase0-seed0")) picker.value = "phase0-seed0";
   else if (data.runs.length) picker.value = data.runs[0];
-  picker.onchange = () => loadRun(picker.value);
+  picker.onchange = () => { liveRunId = null; stopPoll(); loadRun(picker.value); };
+  $("startrun").onclick = startRun;
+  $("applyrule").onclick = applyRule;
   $("play").onclick = play;
   $("pause").onclick = pause;
   $("round").oninput = e => { cur = +e.target.value; pause(); render(); };
   await loadRun(picker.value);
+}
+
+async function startRun() {
+  const seed = +$("seed").value || 0;
+  const r = await fetch("/run", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({seed})});
+  if (!r.ok) { $("status").textContent = "start failed: " + await r.text(); return; }
+  const data = await r.json();
+  liveRunId = data.run_id;
+  await refreshPicker();
+  $("runpicker").value = liveRunId;
+  try { await loadRun(liveRunId); } catch (e) { render(); }
+  startPoll();
+}
+
+async function applyRule() {
+  const runId = $("runpicker").value;
+  const text = $("ruletext").value.trim();
+  if (!runId || !text) return;
+  const r = await fetch("/rule", {method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({run_id: runId, text})});
+  if (!r.ok) { $("status").textContent = "rule failed: " + await r.text(); return; }
+  const data = await r.json();
+  showRule(data.rule);
+  $("status").textContent = "rule applied to " + runId;
+  if (runId === liveRunId) poll();
+}
+
+function showRule(rule) {
+  const box = $("rulebox");
+  box.innerHTML = "";
+  for (const [k, v] of Object.entries(rule)) {
+    const s = document.createElement("span");
+    const b = document.createElement("b");
+    b.textContent = k + ": ";
+    s.appendChild(b);
+    s.appendChild(document.createTextNode(String(v)));
+    box.appendChild(s);
+  }
+}
+
+async function refreshPicker() {
+  const data = await api("/api/runs");
+  const picker = $("runpicker");
+  for (const name of data.runs) {
+    if (![...picker.options].some(o => o.value === name)) {
+      const opt = document.createElement("option");
+      opt.value = name;
+      opt.textContent = name;
+      picker.appendChild(opt);
+    }
+  }
+}
+
+function startPoll() {
+  stopPoll();
+  pollTimer = setInterval(poll, 1000);
+}
+
+function stopPoll() {
+  if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+}
+
+async function poll() {
+  if (!liveRunId) return;
+  let data;
+  try {
+    data = await api("/state/" + encodeURIComponent(liveRunId));
+  } catch (e) {
+    return;
+  }
+  rounds = data.rounds;
+  const slider = $("round");
+  slider.max = Math.max(1, rounds.length);
+  if (rounds.length) cur = rounds.length;
+  render();
+  await refreshPicker();
+  if (!data.active) stopPoll();
 }
 
 async function loadRun(id) {
@@ -92,7 +180,7 @@ function buildBoats() {
     const ang = -Math.PI / 2 + i * 2 * Math.PI / n;
     d.style.left = (170 + 150 * Math.cos(ang)) + "px";
     d.style.top = (170 + 150 * Math.sin(ang)) + "px";
-    d.innerHTML = '<div class="bubble"></div><div class="hull">🛶</div><div class="name"></div>';
+    d.innerHTML = '<div class="bubble"></div><div class="hull">🛶</div><div class="name"></div><div class="fstat"></div>';
     box.appendChild(d);
   }
 }
@@ -100,10 +188,11 @@ function buildBoats() {
 function render() {
   if (!rounds.length) return;
   const rec = rounds[cur - 1];
+  if ($("boats").children.length !== rec.fishers.length) buildBoats();
   $("round").value = cur;
   const dead = rec.stock_after < C.F_DEAD;
   $("roundlabel").textContent = "round " + rec.round + " / " + rounds.length;
-  $("status").textContent = dead ? "lake dead" : "stock " + rec.stock_after;
+  $("status").textContent = (dead ? "lake dead" : "stock " + rec.stock_after) + " | " + (rec.rule ? rec.rule.plain_text : "no rule in effect");
   const circle = $("lakecircle");
   const frac = Math.max(0, Math.min(1, rec.stock_after / C.K));
   circle.setAttribute("r", (20 + 110 * Math.sqrt(frac)).toFixed(1));
@@ -113,9 +202,21 @@ function render() {
     if (!boats[i]) return;
     boats[i].querySelector(".bubble").textContent = f.say || "";
     boats[i].querySelector(".name").textContent = f.name;
+    boats[i].querySelector(".fstat").textContent = f.banned ? "banned" : (f.fined > 0 ? "fined " + f.fined : "");
+    boats[i].classList.toggle("banned", !!f.banned);
   });
   updateStockChart();
   updateCatchChart(rec);
+}
+
+function ruleMarkerRounds() {
+  const markers = new Set();
+  for (let i = 0; i < rounds.length; i++) {
+    const r = rounds[i].rule;
+    const prev = i > 0 ? rounds[i - 1].rule : null;
+    if (r && (!prev || JSON.stringify(prev) !== JSON.stringify(r))) markers.add(rounds[i].round);
+  }
+  return markers;
 }
 
 function updateStockChart() {
@@ -123,12 +224,15 @@ function updateStockChart() {
   const labels = seen.map(r => r.round);
   const stock = seen.map(r => r.stock_after);
   const halfK = labels.map(() => C.K / 2);
+  const markers = ruleMarkerRounds();
+  const marks = labels.map(l => markers.has(l) ? C.K * 0.97 : null);
   if (!stockChart) {
     stockChart = new Chart($("stockchart"), {
       type: "line",
       data: {labels, datasets: [
         {label: "stock", data: stock, borderColor: "#3498db", pointRadius: 2, tension: 0.2},
         {label: "K/2 = " + C.K / 2, data: halfK, borderColor: "#888", borderDash: [6, 6], pointRadius: 0, fill: false},
+        {label: "rule applied", data: marks, showLine: false, pointRadius: 6, pointBackgroundColor: "#f1c40f", fill: false},
       ]},
       options: {animation: false, scales: {x: {ticks: {color: "#eee"}}, y: {min: 0, max: C.K, ticks: {color: "#eee"}}},
                 plugins: {legend: {labels: {color: "#eee"}}}}
@@ -137,6 +241,7 @@ function updateStockChart() {
     stockChart.data.labels = labels;
     stockChart.data.datasets[0].data = stock;
     stockChart.data.datasets[1].data = halfK;
+    stockChart.data.datasets[2].data = marks;
     stockChart.update();
   }
 }
