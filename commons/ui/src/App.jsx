@@ -25,6 +25,7 @@ export default function App() {
   const pollCount = useRef(0);
   const roundsRef = useRef([]);
   const lastSummaryRound = useRef(0);
+  const inspMiss = useRef(0);
 
   useEffect(() => { roundsRef.current = rounds; }, [rounds]);
 
@@ -55,6 +56,7 @@ export default function App() {
       setInspector(null);
       setSummary(null);
       lastSummaryRound.current = 0;
+      inspMiss.current = 0;
       try {
         const r = await api.summarize(id, data.rounds.length ? data.rounds[data.rounds.length - 1].round : 0);
         lastSummaryRound.current = r.round;
@@ -84,6 +86,7 @@ export default function App() {
 
   useEffect(() => {
     const t = setInterval(async () => {
+      if (document.hidden) return;
       pollCount.current++;
       try {
         const r = await api.runs();
@@ -101,18 +104,29 @@ export default function App() {
         } catch (e) { /* transient */ }
       }
       if (runId) {
-        try {
-          setInspector(await api.inspector(runId));
-        } catch (e) {
-          setInspector("waiting");
+        const isLive = liveRunId === runId;
+        if (isLive || pollCount.current % 5 === 0) {
+          if (!isLive && inspMiss.current > 2) {
+            // saved run without inspector output: backed off, retry every 30 s
+            if (pollCount.current % 30 !== 0) { /* skip */ }
+            else {
+              try { setInspector(await api.inspector(runId)); inspMiss.current = 0; }
+              catch (e) { inspMiss.current++; setInspector("waiting"); }
+            }
+          } else {
+            try { setInspector(await api.inspector(runId)); inspMiss.current = 0; }
+            catch (e) { inspMiss.current++; setInspector("waiting"); }
+          }
         }
       }
-      if (pollCount.current % 5 === 0) {
+      if (pollCount.current % 10 === 0) {
         try { setBatch(await api.batch()); } catch (e) { /* keep old */ }
+      }
+      if (pollCount.current % 5 === 0 && runId) {
         const rr = roundsRef.current;
-        if (runId && rr.length) {
+        if (rr.length) {
           const lastRound = rr[rr.length - 1].round;
-          if (lastRound !== lastSummaryRound.current && (lastRound % 5 === 0 || rr.length <= 6)) {
+          if (lastRound % 5 === 0 && lastRound !== lastSummaryRound.current) {
             try {
               const r = await api.summarize(runId, lastRound);
               lastSummaryRound.current = r.round;
