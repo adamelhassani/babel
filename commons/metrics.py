@@ -97,8 +97,12 @@ def regenerate(results_csv=None, runs_dir=None):
             continue
         name = m.group("name")
         seed = int(m.group("seed"))
-        start_round = 4 if name in ("rule3-late", "C-emergency", "D-emergency-relax") else 1
-        rows.append(row_from_log(run_dir, name, start_round, seed))
+        with open(os.path.join(run_dir, "rounds.jsonl"), encoding="utf-8") as fh:
+            first_rule_round = next(
+                (json.loads(l)["round"] for l in fh if l.strip() and json.loads(l).get("rule")),
+                1,
+            )
+        rows.append(row_from_log(run_dir, name, first_rule_round, seed))
     rows.sort(key=lambda r: (r["rule_name"], r["seed"]))
     write_csv(results_csv, rows)
     return rows

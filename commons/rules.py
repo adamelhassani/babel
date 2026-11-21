@@ -37,6 +37,10 @@ def _as_int_or_none(v):
         return None
     if isinstance(v, (int, float)):
         return int(v)
+    if isinstance(v, str):
+        s = v.strip()
+        if s.lstrip("-").isdigit():
+            return int(s)
     return None
 
 
@@ -68,7 +72,7 @@ def normalize_rule(d):
 
 
 async def parse_rule(text):
-    """One sentence -> rule JSON via mistral-medium-latest (reasoning none)."""
+    """One sentence -> rule JSON via mistral-large-4 (reasoning low)."""
     system = (
         "You convert one sentence of village fishing rules into a JSON object with exactly these keys: "
         "quota_per_fisher (int or null: max fish a fisher may take per round), "
@@ -84,8 +88,9 @@ async def parse_rule(text):
     user = f"Rule sentence: {text}"
     data = await call_json(
         [{"role": "system", "content": system}, {"role": "user", "content": user}],
-        model=config.FISHER_MODEL,
-        max_tokens=200,
-        temperature=0.0,
+        model=config.LARGE_MODEL,
+        reasoning_effort="low",
+        max_tokens=1500,
+        timeout=90,
     )
     return normalize_rule({**data, "plain_text": text})

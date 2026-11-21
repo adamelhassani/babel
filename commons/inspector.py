@@ -3,28 +3,8 @@ import asyncio
 import json
 import os
 import time
-import types
 
 from . import config, fishers
-
-_real_loads = json.loads
-
-
-def _part_text(part):
-    if isinstance(part, dict):
-        return part.get("text", "") if part.get("type") == "text" else ""
-    if getattr(part, "type", None) == "text":
-        return getattr(part, "text", "") or ""
-    return ""
-
-
-def _lenient_loads(content):
-    if isinstance(content, list):
-        content = "".join(_part_text(part) for part in content)
-    return _real_loads(content)
-
-
-fishers.json = types.SimpleNamespace(loads=_lenient_loads)
 
 INSPECT_EVERY = 5
 WINDOW = 5
@@ -87,6 +67,7 @@ def top_under_reporters(window, k=TOP_K):
 async def inspect_run(run_dir):
     rounds = load_rounds(run_dir)
     out_path = os.path.join(run_dir, "inspector.jsonl")
+    open(out_path, "w", encoding="utf-8").close()
     start = time.time()
     records = []
     for r in range(INSPECT_EVERY, len(rounds) + 1, INSPECT_EVERY):

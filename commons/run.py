@@ -61,7 +61,7 @@ async def run_result(run_id):
 
 async def run_sim(run_id, seed, rounds, state=None):
     run_dir = new_run_dir(run_id)
-    fh = open(os.path.join(run_dir, "rounds.jsonl"), "a", encoding="utf-8")
+    fh = open(os.path.join(run_dir, "rounds.jsonl"), "w", encoding="utf-8")
     rng = random.Random(seed)
     fishers = [Fisher(name, pressure, seed * 100 + i) for i, (name, pressure) in enumerate(PERSONAS)]
     stock = config.F0
@@ -114,7 +114,7 @@ async def run_sim(run_id, seed, rounds, state=None):
                 "rule": rule,
                 "fishers": [
                     {"name": f.name, "catch": c, "report": reports[i], "say": decisions[i]["say"],
-                     "wealth": f.wealth, "fined": fines[i], "banned": banned_until.get(f.name, 0) > rnd}
+                     "wealth": f.wealth, "fined": fines[i], "banned": banned_until.get(f.name, 0) >= rnd}
                     for i, (f, c) in enumerate(zip(fishers, catches))
                 ],
             }

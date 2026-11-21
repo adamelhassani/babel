@@ -32,6 +32,19 @@ def client():
     return _client
 
 
+def _content_text(content):
+    if isinstance(content, list):
+        parts = []
+        for part in content:
+            if isinstance(part, dict):
+                if part.get("type") == "text":
+                    parts.append(part.get("text", ""))
+            elif getattr(part, "type", None) == "text":
+                parts.append(getattr(part, "text", "") or "")
+        return "".join(parts)
+    return content
+
+
 async def call_json(messages, model=None, max_tokens=None, temperature=0.7,
                     reasoning_effort=None, timeout=None):
     # Defaults are the fisher values, so fisher behaviour is unchanged.
@@ -56,7 +69,7 @@ async def call_json(messages, model=None, max_tokens=None, temperature=0.7,
                     timeout_ms=timeout_ms,
                     response_format={"type": "json_object"},
                 )
-                return json.loads(resp.choices[0].message.content)
+                return json.loads(_content_text(resp.choices[0].message.content))
             except Exception as exc:
                 last_exc = exc
         raise last_exc
@@ -100,13 +113,18 @@ class Fisher:
         ]
         try:
             data = await call_json(messages)
-            catch = int(data.get("catch", config.LIVING))
-            report = int(data.get("report", catch))
-            say = " ".join(str(data.get("say", "")).split()[:15])
         except Exception:
-            catch = config.LIVING
-            report = config.LIVING
-            say = ""
+            data = {}
+
+        def _int_field(key, default):
+            try:
+                return int(data.get(key, default))
+            except (TypeError, ValueError):
+                return default
+
+        catch = _int_field("catch", config.LIVING)
+        report = _int_field("report", catch)
+        say = " ".join(str(data.get("say") or "").split()[:15])
         catch = max(0, min(config.C_MAX, catch))
         report = max(0, min(config.C_MAX, report))
         return {"catch": catch, "report": report, "say": say}

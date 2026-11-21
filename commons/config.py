@@ -27,4 +27,4 @@ REASONING_EFFORT = "none"
 PHASE0_SEEDS = [0, 1, 2]
 PHASE0_ROUNDS = 30
 
-RUNS_DIR = "runs"
+RUNS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "runs")

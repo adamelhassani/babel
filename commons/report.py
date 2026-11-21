@@ -4,29 +4,9 @@ import csv
 import json
 import os
 import time
-import types
 from collections import defaultdict
 
 from . import config, fishers
-
-_real_loads = json.loads
-
-
-def _part_text(part):
-    if isinstance(part, dict):
-        return part.get("text", "") if part.get("type") == "text" else ""
-    if getattr(part, "type", None) == "text":
-        return getattr(part, "text", "") or ""
-    return ""
-
-
-def _lenient_loads(content):
-    if isinstance(content, list):
-        content = "".join(_part_text(part) for part in content)
-    return _real_loads(content)
-
-
-fishers.json = types.SimpleNamespace(loads=_lenient_loads)
 
 REPORT_SYSTEM = (
     "You are a fisheries scientist writing a short report from experiment logs. "
